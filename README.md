@@ -32,10 +32,26 @@ Die Anwendung ist anschließend unter `http://localhost:3000` erreichbar. Die lo
 
 Empfohlen wird Raspberry Pi OS 64-Bit mit Docker und Docker Compose.
 
+Da das Repository privat ist, funktioniert das GitHub-Account-Passwort beim Klonen nicht. Empfohlen wird der Zugriff per SSH. Auf dem Raspberry Pi wird dafür einmalig ein Schlüssel erzeugt:
+
 ```bash
-git clone https://github.com/descipar/stickerfolio.git
+ssh-keygen -t ed25519 -C "stickerfolio-raspberry-pi"
+cat ~/.ssh/id_ed25519.pub
+```
+
+Den ausgegebenen öffentlichen Schlüssel anschließend bei GitHub unter **Settings → SSH and GPG keys → New SSH key** hinterlegen. Danach kann die Verbindung geprüft und das Repository geklont werden:
+
+```bash
+ssh -T git@github.com
+git clone git@github.com:descipar/stickerfolio.git
 cd stickerfolio
 docker compose up -d --build
+```
+
+Alternativ ist HTTPS mit einem [Fine-grained Personal Access Token](https://github.com/settings/personal-access-tokens/new) möglich. Der Token benötigt für `descipar/stickerfolio` nur **Contents: Read-only**. Beim folgenden Befehl wird als Benutzername `descipar` und bei der Passwortabfrage der Token eingegeben – nicht das GitHub-Passwort:
+
+```bash
+git clone https://github.com/descipar/stickerfolio.git
 ```
 
 Auf dem iPhone wird Stickerfolio über `http://<IP-DES-PI>:6000` oder `http://raspberrypi.local:6000` geöffnet. In Safari kann die Seite über „Teilen“ → „Zum Home-Bildschirm“ als Web-App abgelegt werden.
