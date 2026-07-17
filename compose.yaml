@@ -1,6 +1,5 @@
 services:
   app:
-    image: ghcr.io/descipar/stickerfolio:latest
     build:
       context: .
     container_name: stickerfolio

@@ -51,7 +51,8 @@ Den ausgegebenen öffentlichen Schlüssel anschließend bei GitHub unter **Setti
 ssh -T git@github.com
 git clone git@github.com:descipar/stickerfolio.git
 cd stickerfolio
-docker compose up -d --build
+docker compose build --pull
+docker compose up -d
 ```
 
 Der Container startet ohne Sammler und Albumdaten. Zuerst Stickerfolio im Browser öffnen und Sarah unter **Sammler anlegen** eintragen. Die dort angezeigte Kennung wird anschließend an das Seed-Skript übergeben:
@@ -70,21 +71,20 @@ git clone https://github.com/descipar/stickerfolio.git
 
 Auf dem iPhone wird Stickerfolio über `http://<IP-DES-PI>:6000` oder `http://raspberrypi.local:6000` geöffnet. In Safari kann die Seite über „Teilen“ → „Zum Home-Bildschirm“ als Web-App abgelegt werden.
 
-### Fertiges Image aus GHCR verwenden
+### Aktualisieren
 
-Das GitHub-Workflow baut Images für `linux/amd64` und `linux/arm64`. Da das Repository privat ist, muss Docker auf dem Pi einmal mit einem GitHub-Token mit `read:packages` angemeldet werden:
+Stickerfolio wird immer direkt auf dem Raspberry Pi aus dem aktuellen Quellcode gebaut. Vor einem Update zuerst ein Backup erstellen, anschließend den Quellcode aktualisieren und das Image neu bauen:
 
 ```bash
-docker login ghcr.io -u descipar
-docker compose pull
+cd stickerfolio
+./scripts/backup.sh
+git pull
+docker compose build --pull
 docker compose up -d
+docker compose ps
 ```
 
-Auch beim fertigen Image werden Sarahs Daten nicht automatisch geladen. Falls sie gewünscht sind, muss ebenfalls die Kennung des zuvor in der App angelegten Sammlers angegeben werden:
-
-```bash
-docker compose exec app node seed/scripts/seed-sarah.js --collector sarah
-```
+`docker compose build --pull` lädt nur die aktuellen Basis-Images wie Node.js und baut Stickerfolio anschließend lokal. Es wird kein fertiges Stickerfolio-Image aus GitHub oder GHCR heruntergeladen. Die Datenbank im Ordner `data/` bleibt dabei erhalten.
 
 ### Sammler verwalten
 
