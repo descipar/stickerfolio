@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { expandNumberSpec } from "./catalog";
-import { initialWm2026Quantity, wm2026Catalog, wm2026DuplicateCodes, wm2026MissingCodes } from "@/data/wm2026";
+import { initialWm2026Quantity, wm2026Catalog, wm2026DuplicateCodes, wm2026MissingCodes } from "../data/wm2026";
 
 describe("Katalog-Helfer", () => {
   it("erweitert Nummernbereiche", () => {
