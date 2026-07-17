@@ -69,7 +69,7 @@ Alternativ ist HTTPS mit einem [Fine-grained Personal Access Token](https://gith
 git clone https://github.com/descipar/stickerfolio.git
 ```
 
-Auf dem iPhone wird Stickerfolio über `http://<IP-DES-PI>:6000` oder `http://raspberrypi.local:6000` geöffnet. In Safari kann die Seite über „Teilen“ → „Zum Home-Bildschirm“ als Web-App abgelegt werden.
+Auf dem iPhone wird Stickerfolio über `http://<IP-DES-PI>:3500` oder `http://raspberrypi.local:3500` geöffnet. In Safari kann die Seite über „Teilen“ → „Zum Home-Bildschirm“ als Web-App abgelegt werden.
 
 ### Aktualisieren
 

@@ -15,4 +15,4 @@ fi
 mkdir -p "$project_dir/data"
 docker compose up -d --build
 
-echo "Stickerfolio läuft leer unter http://raspberrypi.local:6000"
+echo "Stickerfolio läuft leer unter http://raspberrypi.local:3500"
