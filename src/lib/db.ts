@@ -5,7 +5,7 @@ import { mkdirSync } from "node:fs";
 import { dirname, join } from "node:path";
 import type { ImportedSticker } from "@/lib/csv";
 import { createSchema } from "@/lib/schema";
-import type { AlbumDetail, AlbumSummary, SectionView, StickerView } from "@/lib/types";
+import type { AlbumDetail, AlbumSummary, Collector, SectionView, StickerView } from "@/lib/types";
 
 const databasePath = process.env.DATABASE_PATH ?? join(process.cwd(), "data", "stickerfolio.db");
 let database: Database.Database | undefined;
@@ -14,24 +14,31 @@ function slugify(value: string): string {
   return value.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "album";
 }
 
-export function getCollectorConfig(): { slug: string; name: string } {
-  const name = process.env.COLLECTOR_NAME?.trim() || "Sarah";
-  const slug = process.env.COLLECTOR_SLUG?.trim() || slugify(name);
-  return { slug, name };
-}
-
-function getActiveCollector(db: Database.Database): { id: number; name: string } {
-  const collector = getCollectorConfig();
-  db.prepare("INSERT OR IGNORE INTO collectors (slug, name) VALUES (?, ?)").run(collector.slug, collector.name);
-  return db.prepare("SELECT id, name FROM collectors WHERE slug = ?").get(collector.slug) as { id: number; name: string };
-}
-
 export function getDb(): Database.Database {
   if (database) return database;
   mkdirSync(dirname(databasePath), { recursive: true });
   database = new Database(databasePath);
   createSchema(database);
   return database;
+}
+
+export function getCollectors(): Collector[] {
+  return getDb().prepare("SELECT id, slug, name FROM collectors ORDER BY created_at, id").all() as Collector[];
+}
+
+export function getCollector(collectorId: number): Collector | null {
+  return (getDb().prepare("SELECT id, slug, name FROM collectors WHERE id = ?").get(collectorId) as Collector | undefined) ?? null;
+}
+
+export function createCollector(name: string): Collector {
+  const db = getDb();
+  const cleanName = name.trim();
+  const baseSlug = slugify(cleanName);
+  let slug = baseSlug;
+  let suffix = 2;
+  while (db.prepare("SELECT 1 FROM collectors WHERE slug = ?").get(slug)) slug = `${baseSlug}-${suffix++}`;
+  const id = Number(db.prepare("INSERT INTO collectors (slug, name) VALUES (?, ?)").run(slug, cleanName).lastInsertRowid);
+  return { id, slug, name: cleanName };
 }
 
 const summaryQuery = `
@@ -49,17 +56,17 @@ const summaryQuery = `
   GROUP BY a.id, c.id
 `;
 
-export function getDashboard(): { collector: { id: number; name: string }; albums: AlbumSummary[] } {
+export function getDashboard(collectorId: number): { collector: Collector; albums: AlbumSummary[] } | null {
   const db = getDb();
-  const collector = getActiveCollector(db);
+  const collector = getCollector(collectorId);
+  if (!collector) return null;
   const albums = db.prepare(`${summaryQuery} ORDER BY a.created_at, a.id`).all(collector.id) as AlbumSummary[];
   return { collector, albums };
 }
 
-export function getAlbum(albumId: number): AlbumDetail | null {
+export function getAlbum(collectorId: number, albumId: number): AlbumDetail | null {
   const db = getDb();
-  const collector = getActiveCollector(db);
-  const album = db.prepare(`${summaryQuery} HAVING a.id = ?`).get(collector.id, albumId) as AlbumSummary | undefined;
+  const album = db.prepare(`${summaryQuery} HAVING a.id = ?`).get(collectorId, albumId) as AlbumSummary | undefined;
   if (!album) return null;
 
   const sections = db.prepare(`
@@ -84,19 +91,21 @@ export function getAlbum(albumId: number): AlbumDetail | null {
   return { ...album, sections, stickers };
 }
 
-export function updateHolding(collectionId: number, stickerId: number, quantity: number): number {
+export function updateHolding(collectorId: number, collectionId: number, stickerId: number, quantity: number): number {
   const db = getDb();
   const result = db.prepare(`
     UPDATE holdings SET quantity = ?, updated_at = CURRENT_TIMESTAMP
     WHERE collection_id = ? AND sticker_id = ?
-  `).run(quantity, collectionId, stickerId);
+      AND EXISTS (SELECT 1 FROM collections WHERE id = ? AND collector_id = ?)
+  `).run(quantity, collectionId, stickerId, collectionId, collectorId);
   if (result.changes !== 1) throw new Error("Stickerbestand wurde nicht gefunden.");
   return quantity;
 }
 
-export function createAlbumForActiveCollector(name: string, description: string, stickers: ImportedSticker[]): number {
+export function createAlbumForCollector(collectorId: number, name: string, description: string, stickers: ImportedSticker[]): number {
   const db = getDb();
-  const collector = getActiveCollector(db);
+  const collector = getCollector(collectorId);
+  if (!collector) throw new Error("Bitte zuerst einen Sammler auswählen.");
   return db.transaction(() => {
     const baseSlug = slugify(name);
     let slug = baseSlug;

@@ -1,14 +1,16 @@
 import { NextResponse } from "next/server";
 import { escapeCsv } from "@/lib/csv";
-import { getAlbum, getCollectorConfig } from "@/lib/db";
+import { getActiveCollector } from "@/lib/active-collector";
+import { getAlbum } from "@/lib/db";
 
 export const dynamic = "force-dynamic";
 
 export async function GET(request: Request, context: { params: Promise<{ albumId: string }> }) {
   const { albumId } = await context.params;
-  const album = getAlbum(Number(albumId));
+  const collector = await getActiveCollector();
+  if (!collector) return NextResponse.json({ error: "Bitte zuerst einen Sammler auswählen." }, { status: 400 });
+  const album = getAlbum(collector.id, Number(albumId));
   if (!album) return NextResponse.json({ error: "Album nicht gefunden." }, { status: 404 });
-  const collector = getCollectorConfig();
   const format = new URL(request.url).searchParams.get("format") ?? "csv";
 
   if (format === "json") {

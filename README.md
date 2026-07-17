@@ -1,10 +1,10 @@
 # Stickerfolio
 
-Stickerfolio ist eine selbst gehostete, für Smartphones optimierte Verwaltung für Stickeralben. Der MVP verwaltet die Alben eines konfigurierbaren Sammlers ohne Anmeldung und ist für den Betrieb im Heimnetz oder über VPN ausgelegt.
+Stickerfolio ist eine selbst gehostete, für Smartphones optimierte Verwaltung für Stickeralben. Sammler werden direkt in der App angelegt und ausgewählt. Die Anwendung kommt ohne Anmeldung aus und ist für den Betrieb im Heimnetz oder über VPN ausgelegt.
 
 ## Funktionen
 
-- Ein Sammler kann mehrere Alben verwalten.
+- Mehrere Sammler mit jeweils eigenen Alben und Beständen.
 - Fehlende Sticker lassen sich mit einem Tipp als vorhanden markieren.
 - Die Anzahl vorhandener Exemplare und Doubletten kann erhöht oder reduziert werden.
 - Suche nach Stickercode, Bereich oder Team.
@@ -26,12 +26,12 @@ pnpm install
 pnpm dev
 ```
 
-Die Anwendung ist anschließend unter `http://localhost:3000` erreichbar. Die lokale Datenbank wird unter `data/stickerfolio.db` angelegt.
+Die Anwendung ist anschließend unter `http://localhost:3000` erreichbar. Die lokale Datenbank wird unter `data/stickerfolio.db` angelegt. Beim ersten Aufruf wird der erste Sammler in der App angelegt.
 
-Sarahs vorbereiteten WM-2026-Startbestand lokal laden:
+Nach dem Anlegen von Sarah in der App kann ihr vorbereiteter WM-2026-Startbestand lokal geladen werden:
 
 ```bash
-pnpm seed:sarah
+pnpm seed:sarah -- --collector sarah
 ```
 
 ## Raspberry Pi 4
@@ -54,13 +54,13 @@ cd stickerfolio
 docker compose up -d --build
 ```
 
-Der Container startet mit einer leeren Sammlung. Sarahs vorbereiteter WM-2026-Stand wird nur mit diesem zusätzlichen, ausdrücklichen Befehl geladen:
+Der Container startet ohne Sammler und Albumdaten. Zuerst Stickerfolio im Browser öffnen und Sarah unter **Sammler anlegen** eintragen. Die dort angezeigte Kennung wird anschließend an das Seed-Skript übergeben:
 
 ```bash
-docker compose exec app node seed/scripts/seed-sarah.js
+docker compose exec app node seed/scripts/seed-sarah.js --collector sarah
 ```
 
-Das Skript kann gefahrlos erneut aufgerufen werden. Bereits vorhandene Stickerbestände werden nicht überschrieben.
+Das Skript legt keinen Sammler an. Es lädt Sarahs WM-2026-Stand ausschließlich für den angegebenen, bereits vorhandenen Sammler. Es kann gefahrlos erneut aufgerufen werden; vorhandene Stickerbestände werden nicht überschrieben.
 
 Alternativ ist HTTPS mit einem [Fine-grained Personal Access Token](https://github.com/settings/personal-access-tokens/new) möglich. Der Token benötigt für `descipar/stickerfolio` nur **Contents: Read-only**. Beim folgenden Befehl wird als Benutzername `descipar` und bei der Passwortabfrage der Token eingegeben – nicht das GitHub-Passwort:
 
@@ -80,24 +80,15 @@ docker compose pull
 docker compose up -d
 ```
 
-Auch beim fertigen Image werden Sarahs Daten nicht automatisch geladen. Falls sie gewünscht sind, anschließend denselben Seed-Befehl ausführen:
+Auch beim fertigen Image werden Sarahs Daten nicht automatisch geladen. Falls sie gewünscht sind, muss ebenfalls die Kennung des zuvor in der App angelegten Sammlers angegeben werden:
 
 ```bash
-docker compose exec app node seed/scripts/seed-sarah.js
+docker compose exec app node seed/scripts/seed-sarah.js --collector sarah
 ```
 
-### Anderen Sammler verwenden
+### Sammler verwalten
 
-Standardmäßig verwendet die Compose-Datei den Namen Sarah. Für eine andere Installation vor dem ersten Start eine `.env` neben `compose.yaml` anlegen:
-
-```dotenv
-COLLECTOR_NAME=Lisa
-COLLECTOR_SLUG=lisa
-```
-
-Danach `docker compose up -d` starten und die gewünschten Alben über die Oberfläche importieren. Das Sarah-Seed-Skript wird für solche Installationen nicht benötigt.
-
-`COLLECTOR_SLUG` ist die dauerhafte interne Kennung und sollte nach dem ersten Start nicht mehr geändert werden.
+Sammler werden ausschließlich über die App verwaltet. Über den Namen oben rechts kann die Sammler-Verwaltung geöffnet werden. Dort lassen sich weitere Sammler anlegen und der aktive Sammler wechseln. Die Auswahl wird im Browser gespeichert; Docker oder `compose.yaml` müssen dafür nicht verändert werden.
 
 ## Daten und Backup
 
@@ -134,7 +125,7 @@ GER,Deutschland,GER2,2,Sticker GER2
 - `collections`: Zuordnung eines Albums zu einem Sammler
 - `holdings`: Anzahl eines Stickers in einer Sammlung
 
-Der aktive Sammler wird über `COLLECTOR_NAME` und `COLLECTOR_SLUG` konfiguriert. Eine spätere Sammlerauswahl kann ergänzt werden, ohne Kataloge oder Bestände umzubauen.
+Der aktive Sammler wird in der App ausgewählt und in einem Browser-Cookie gespeichert. Alben und Bestände bleiben in der SQLite-Datenbank sauber nach Sammlern getrennt.
 
 ## Qualitätssicherung
 

@@ -9,8 +9,6 @@ services:
       - "6000:3000"
     environment:
       DATABASE_PATH: /data/stickerfolio.db
-      COLLECTOR_NAME: ${COLLECTOR_NAME:-Sarah}
-      COLLECTOR_SLUG: ${COLLECTOR_SLUG:-sarah}
     volumes:
       - ./data:/data
     healthcheck:

@@ -1,10 +1,31 @@
 import Link from "next/link";
+import { getActiveCollector } from "@/lib/active-collector";
 import { getDashboard } from "@/lib/db";
 
 export const dynamic = "force-dynamic";
 
-export default function HomePage() {
-  const { collector, albums } = getDashboard();
+export default async function HomePage() {
+  const activeCollector = await getActiveCollector();
+  if (!activeCollector) {
+    return (
+      <div className="narrow-page stack page-enter">
+        <section className="hero">
+          <p className="eyebrow">Willkommen</p>
+          <h1>Deine Stickeralben an einem Ort</h1>
+          <p className="muted">Lege zuerst einen Sammler an. Danach kannst du beliebige Alben importieren und Bestände pflegen.</p>
+        </section>
+        <section className="empty-state onboarding-card">
+          <span aria-hidden="true">＋</span>
+          <h3>Ersten Sammler anlegen</h3>
+          <p>Name und Sammlung werden direkt in Stickerfolio gespeichert.</p>
+          <Link href="/collectors" className="button button-primary">Jetzt einrichten</Link>
+        </section>
+      </div>
+    );
+  }
+  const dashboard = getDashboard(activeCollector.id);
+  if (!dashboard) return null;
+  const { collector, albums } = dashboard;
   const totals = albums.reduce((sum, album) => ({ total: sum.total + album.total, owned: sum.owned + album.owned, missing: sum.missing + album.missing, doubles: sum.doubles + album.extraDuplicates }), { total: 0, owned: 0, missing: 0, doubles: 0 });
 
   return (

@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import Link from "next/link";
+import { getActiveCollector } from "@/lib/active-collector";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -17,8 +18,8 @@ export const viewport: Viewport = {
   colorScheme: "light",
 };
 
-export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
-  const collectorName = process.env.COLLECTOR_NAME?.trim() || "Sarah";
+export default async function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
+  const collector = await getActiveCollector();
   return (
     <html lang="de">
       <body>
@@ -27,7 +28,7 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
             <span className="brand-mark">S</span>
             <span>Stickerfolio</span>
           </Link>
-          <span className="collector-pill">{collectorName}</span>
+          <Link href="/collectors" className="collector-pill">{collector?.name ?? "Sammler anlegen"}</Link>
         </header>
         <main className="page-shell">{children}</main>
       </body>

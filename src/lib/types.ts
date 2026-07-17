@@ -1,3 +1,9 @@
+export type Collector = {
+  id: number;
+  slug: string;
+  name: string;
+};
+
 export type AlbumSummary = {
   id: number;
   slug: string;
