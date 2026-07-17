@@ -86,6 +86,16 @@ docker compose ps
 
 `docker compose build --pull` lädt nur die aktuellen Basis-Images wie Node.js und baut Stickerfolio anschließend lokal. Es wird kein fertiges Stickerfolio-Image aus GitHub oder GHCR heruntergeladen. Die Datenbank im Ordner `data/` bleibt dabei erhalten.
 
+### Vollständig zurücksetzen
+
+Dieser Befehl entfernt den Container, das lokal gebaute Image sowie sämtliche Sammler-, Album- und Bestandsdaten. Anschließend wird Stickerfolio neu gebaut und vollständig leer gestartet:
+
+```bash
+./scripts/reset.sh
+```
+
+Danach wird der erste Sammler wieder direkt in der App angelegt. Das Seed-Skript wird nur ausgeführt, wenn der vorbereitete Sarah-Bestand ausdrücklich geladen werden soll.
+
 ### Sammler verwalten
 
 Sammler werden ausschließlich über die App verwaltet. Über den Namen oben rechts kann die Sammler-Verwaltung geöffnet werden. Dort lassen sich weitere Sammler anlegen und der aktive Sammler wechseln. Die Auswahl wird im Browser gespeichert; Docker oder `compose.yaml` müssen dafür nicht verändert werden.
