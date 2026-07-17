@@ -1,0 +1,29 @@
+{
+  "name": "stickerfolio",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Self-hosted, mobile-friendly sticker album tracker supporting multiple collectors and albums.",
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "better-sqlite3": "12.11.1",
+    "next": "16.2.10",
+    "react": "19.2.7",
+    "react-dom": "19.2.7",
+    "zod": "4.4.3"
+  },
+  "devDependencies": {
+    "@types/better-sqlite3": "7.6.13",
+    "@types/node": "26.1.1",
+    "@types/react": "19.2.17",
+    "@types/react-dom": "19.2.3",
+    "typescript": "^5.9.3",
+    "vitest": "4.1.10"
+  },
+  "packageManager": "pnpm@11.9.0"
+}
