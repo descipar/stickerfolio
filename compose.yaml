@@ -6,7 +6,7 @@ services:
     container_name: stickerfolio
     restart: unless-stopped
     ports:
-      - "3000:3000"
+      - "6000:3000"
     environment:
       DATABASE_PATH: /data/stickerfolio.db
     volumes:

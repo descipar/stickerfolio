@@ -38,7 +38,7 @@ cd stickerfolio
 docker compose up -d --build
 ```
 
-Auf dem iPhone wird Stickerfolio über `http://<IP-DES-PI>:3000` oder `http://raspberrypi.local:3000` geöffnet. In Safari kann die Seite über „Teilen“ → „Zum Home-Bildschirm“ als Web-App abgelegt werden.
+Auf dem iPhone wird Stickerfolio über `http://<IP-DES-PI>:6000` oder `http://raspberrypi.local:6000` geöffnet. In Safari kann die Seite über „Teilen“ → „Zum Home-Bildschirm“ als Web-App abgelegt werden.
 
 ### Fertiges Image aus GHCR verwenden
 
