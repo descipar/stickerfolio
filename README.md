@@ -1,10 +1,10 @@
 # Stickerfolio
 
-Stickerfolio ist eine selbst gehostete, für Smartphones optimierte Verwaltung für Stickeralben. Der MVP verwaltet Sarahs Alben ohne Anmeldung und ist für den Betrieb im Heimnetz oder über VPN ausgelegt.
+Stickerfolio ist eine selbst gehostete, für Smartphones optimierte Verwaltung für Stickeralben. Der MVP verwaltet die Alben eines konfigurierbaren Sammlers ohne Anmeldung und ist für den Betrieb im Heimnetz oder über VPN ausgelegt.
 
 ## Funktionen
 
-- Sarah kann mehrere Alben verwalten.
+- Ein Sammler kann mehrere Alben verwalten.
 - Fehlende Sticker lassen sich mit einem Tipp als vorhanden markieren.
 - Die Anzahl vorhandener Exemplare und Doubletten kann erhöht oder reduziert werden.
 - Suche nach Stickercode, Bereich oder Team.
@@ -15,7 +15,7 @@ Stickerfolio ist eine selbst gehostete, für Smartphones optimierte Verwaltung f
 - Erweiterbares Datenmodell für mehrere Sammler.
 - Mobile Web-App für den iPhone-Home-Bildschirm.
 
-Das vorinstallierte Album „Panini WM 2026“ enthält 994 Sticker: 48 Teams mit je 20 Stickern, `FWC00–19` sowie `CC1–14`. Sarahs Stand vom 16.07.2026 ist als Initialbestand hinterlegt. Hinweise auf mögliche Tauschaktionen werden bewusst nicht als eigener Zustand übernommen.
+Eine neue Installation startet ohne Album und ohne Stickerbestand. Sarahs Stand des Albums „Panini WM 2026“ vom 16.07.2026 kann bei Bedarf ausdrücklich über das mitgelieferte Seed-Skript geladen werden. Hinweise auf mögliche Tauschaktionen werden bewusst nicht als eigener Zustand übernommen.
 
 ## Lokal entwickeln
 
@@ -27,6 +27,12 @@ pnpm dev
 ```
 
 Die Anwendung ist anschließend unter `http://localhost:3000` erreichbar. Die lokale Datenbank wird unter `data/stickerfolio.db` angelegt.
+
+Sarahs vorbereiteten WM-2026-Startbestand lokal laden:
+
+```bash
+pnpm seed:sarah
+```
 
 ## Raspberry Pi 4
 
@@ -48,6 +54,14 @@ cd stickerfolio
 docker compose up -d --build
 ```
 
+Der Container startet mit einer leeren Sammlung. Sarahs vorbereiteter WM-2026-Stand wird nur mit diesem zusätzlichen, ausdrücklichen Befehl geladen:
+
+```bash
+docker compose exec app node seed/scripts/seed-sarah.js
+```
+
+Das Skript kann gefahrlos erneut aufgerufen werden. Bereits vorhandene Stickerbestände werden nicht überschrieben.
+
 Alternativ ist HTTPS mit einem [Fine-grained Personal Access Token](https://github.com/settings/personal-access-tokens/new) möglich. Der Token benötigt für `descipar/stickerfolio` nur **Contents: Read-only**. Beim folgenden Befehl wird als Benutzername `descipar` und bei der Passwortabfrage der Token eingegeben – nicht das GitHub-Passwort:
 
 ```bash
@@ -66,9 +80,30 @@ docker compose pull
 docker compose up -d
 ```
 
+Auch beim fertigen Image werden Sarahs Daten nicht automatisch geladen. Falls sie gewünscht sind, anschließend denselben Seed-Befehl ausführen:
+
+```bash
+docker compose exec app node seed/scripts/seed-sarah.js
+```
+
+### Anderen Sammler verwenden
+
+Standardmäßig verwendet die Compose-Datei den Namen Sarah. Für eine andere Installation vor dem ersten Start eine `.env` neben `compose.yaml` anlegen:
+
+```dotenv
+COLLECTOR_NAME=Lisa
+COLLECTOR_SLUG=lisa
+```
+
+Danach `docker compose up -d` starten und die gewünschten Alben über die Oberfläche importieren. Das Sarah-Seed-Skript wird für solche Installationen nicht benötigt.
+
+`COLLECTOR_SLUG` ist die dauerhafte interne Kennung und sollte nach dem ersten Start nicht mehr geändert werden.
+
 ## Daten und Backup
 
 Die SQLite-Datenbank liegt dauerhaft im Ordner `data/` neben der Compose-Datei. Sie wird nicht in ein Docker-Image eingebaut und bleibt bei Updates erhalten.
+
+Bei einer bestehenden Installation bleiben bereits geladene Sarah-Daten durch diese Änderung erhalten. Nur eine neu angelegte Datenbank startet ohne Albumdaten.
 
 Ein konsistentes Backup kann so erstellt werden:
 
@@ -99,7 +134,7 @@ GER,Deutschland,GER2,2,Sticker GER2
 - `collections`: Zuordnung eines Albums zu einem Sammler
 - `holdings`: Anzahl eines Stickers in einer Sammlung
 
-Die Oberfläche verwendet zunächst automatisch Sarah. Später kann eine Sammlerauswahl ergänzt werden, ohne Kataloge oder Bestände umzubauen.
+Der aktive Sammler wird über `COLLECTOR_NAME` und `COLLECTOR_SLUG` konfiguriert. Eine spätere Sammlerauswahl kann ergänzt werden, ohne Kataloge oder Bestände umzubauen.
 
 ## Qualitätssicherung
 
@@ -107,4 +142,5 @@ Die Oberfläche verwendet zunächst automatisch Sarah. Später kann eine Sammler
 pnpm test
 pnpm typecheck
 pnpm build
+pnpm seed:build
 ```

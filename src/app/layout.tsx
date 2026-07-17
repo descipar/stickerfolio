@@ -4,7 +4,7 @@ import "./globals.css";
 
 export const metadata: Metadata = {
   title: { default: "Stickerfolio", template: "%s · Stickerfolio" },
-  description: "Sarahs mobile Stickeralbum-Verwaltung",
+  description: "Mobile Stickeralbum-Verwaltung",
   applicationName: "Stickerfolio",
   appleWebApp: { capable: true, title: "Stickerfolio", statusBarStyle: "default" },
   icons: { icon: "/icon.svg", apple: "/icon.svg" },
@@ -18,6 +18,7 @@ export const viewport: Viewport = {
 };
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
+  const collectorName = process.env.COLLECTOR_NAME?.trim() || "Sarah";
   return (
     <html lang="de">
       <body>
@@ -26,7 +27,7 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
             <span className="brand-mark">S</span>
             <span>Stickerfolio</span>
           </Link>
-          <span className="collector-pill">Sarah</span>
+          <span className="collector-pill">{collectorName}</span>
         </header>
         <main className="page-shell">{children}</main>
       </body>

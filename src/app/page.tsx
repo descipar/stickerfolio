@@ -27,6 +27,14 @@ export default function HomePage() {
       </section>
 
       <div className="album-grid">
+        {albums.length === 0 && (
+          <section className="empty-state">
+            <span aria-hidden="true">＋</span>
+            <h3>Noch kein Album vorhanden</h3>
+            <p>Importiere einen Stickerkatalog oder lade einen vorbereiteten Startbestand per Skript.</p>
+            <Link href="/albums/new" className="button button-primary">Erstes Album anlegen</Link>
+          </section>
+        )}
         {albums.map((album) => {
           const percent = album.total ? Math.round((album.owned / album.total) * 100) : 0;
           return (

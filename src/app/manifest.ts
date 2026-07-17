@@ -2,7 +2,7 @@ import type { MetadataRoute } from "next";
 
 export default function manifest(): MetadataRoute.Manifest {
   return {
-    name: "Stickerfolio – Sarahs Stickeralben",
+    name: "Stickerfolio – Stickeralben verwalten",
     short_name: "Stickerfolio",
     description: "Stickeralben, fehlende Sticker und Doubletten verwalten.",
     start_url: "/",

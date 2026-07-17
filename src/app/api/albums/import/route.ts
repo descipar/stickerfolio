@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { createAlbumForSarah } from "@/lib/db";
+import { createAlbumForActiveCollector } from "@/lib/db";
 import { parseAlbumCsv } from "@/lib/csv";
 
 export const dynamic = "force-dynamic";
@@ -15,7 +15,7 @@ export async function POST(request: Request) {
   try {
     const payload = payloadSchema.parse(await request.json());
     const stickers = parseAlbumCsv(payload.csv);
-    const albumId = createAlbumForSarah(payload.name, payload.description, stickers);
+    const albumId = createAlbumForActiveCollector(payload.name, payload.description, stickers);
     return NextResponse.json({ albumId }, { status: 201 });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Das Album konnte nicht importiert werden.";

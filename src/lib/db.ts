@@ -3,8 +3,8 @@ import "server-only";
 import Database from "better-sqlite3";
 import { mkdirSync } from "node:fs";
 import { dirname, join } from "node:path";
-import { initialWm2026Quantity, wm2026Catalog, wm2026Sections } from "@/data/wm2026";
 import type { ImportedSticker } from "@/lib/csv";
+import { createSchema } from "@/lib/schema";
 import type { AlbumDetail, AlbumSummary, SectionView, StickerView } from "@/lib/types";
 
 const databasePath = process.env.DATABASE_PATH ?? join(process.cwd(), "data", "stickerfolio.db");
@@ -14,83 +14,16 @@ function slugify(value: string): string {
   return value.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "album";
 }
 
-function createSchema(db: Database.Database) {
-  db.exec(`
-    PRAGMA journal_mode = WAL;
-    PRAGMA foreign_keys = ON;
-    CREATE TABLE IF NOT EXISTS collectors (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      slug TEXT NOT NULL UNIQUE,
-      name TEXT NOT NULL,
-      created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
-    );
-    CREATE TABLE IF NOT EXISTS albums (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      slug TEXT NOT NULL UNIQUE,
-      name TEXT NOT NULL,
-      description TEXT NOT NULL DEFAULT '',
-      created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
-    );
-    CREATE TABLE IF NOT EXISTS sections (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      album_id INTEGER NOT NULL REFERENCES albums(id) ON DELETE CASCADE,
-      code TEXT NOT NULL,
-      name TEXT NOT NULL,
-      sort_order INTEGER NOT NULL,
-      UNIQUE(album_id, code)
-    );
-    CREATE TABLE IF NOT EXISTS stickers (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      album_id INTEGER NOT NULL REFERENCES albums(id) ON DELETE CASCADE,
-      section_id INTEGER NOT NULL REFERENCES sections(id) ON DELETE CASCADE,
-      code TEXT NOT NULL,
-      number TEXT NOT NULL DEFAULT '',
-      label TEXT NOT NULL,
-      sort_order INTEGER NOT NULL,
-      UNIQUE(album_id, code)
-    );
-    CREATE TABLE IF NOT EXISTS collections (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      collector_id INTEGER NOT NULL REFERENCES collectors(id) ON DELETE CASCADE,
-      album_id INTEGER NOT NULL REFERENCES albums(id) ON DELETE CASCADE,
-      created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-      UNIQUE(collector_id, album_id)
-    );
-    CREATE TABLE IF NOT EXISTS holdings (
-      collection_id INTEGER NOT NULL REFERENCES collections(id) ON DELETE CASCADE,
-      sticker_id INTEGER NOT NULL REFERENCES stickers(id) ON DELETE CASCADE,
-      quantity INTEGER NOT NULL DEFAULT 0 CHECK(quantity >= 0 AND quantity <= 99),
-      updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-      PRIMARY KEY(collection_id, sticker_id)
-    );
-    CREATE INDEX IF NOT EXISTS idx_stickers_album ON stickers(album_id, sort_order);
-    CREATE INDEX IF NOT EXISTS idx_holdings_collection ON holdings(collection_id, quantity);
-  `);
+export function getCollectorConfig(): { slug: string; name: string } {
+  const name = process.env.COLLECTOR_NAME?.trim() || "Sarah";
+  const slug = process.env.COLLECTOR_SLUG?.trim() || slugify(name);
+  return { slug, name };
 }
 
-function seedWm2026(db: Database.Database) {
-  db.prepare("INSERT OR IGNORE INTO collectors (slug, name) VALUES ('sarah', 'Sarah')").run();
-  db.prepare("INSERT OR IGNORE INTO albums (slug, name, description) VALUES (?, ?, ?)")
-    .run("wm-2026", "Panini WM 2026", "994 Sticker · 48 Teams · Sondersticker");
-
-  const collectorId = (db.prepare("SELECT id FROM collectors WHERE slug = 'sarah'").get() as { id: number }).id;
-  const albumId = (db.prepare("SELECT id FROM albums WHERE slug = 'wm-2026'").get() as { id: number }).id;
-
-  const insertSection = db.prepare("INSERT OR IGNORE INTO sections (album_id, code, name, sort_order) VALUES (?, ?, ?, ?)");
-  wm2026Sections.forEach((section, index) => insertSection.run(albumId, section.code, section.name, index));
-
-  const sectionRows = db.prepare("SELECT id, code FROM sections WHERE album_id = ?").all(albumId) as Array<{ id: number; code: string }>;
-  const sectionIds = new Map(sectionRows.map((section) => [section.code, section.id]));
-  const insertSticker = db.prepare("INSERT OR IGNORE INTO stickers (album_id, section_id, code, number, label, sort_order) VALUES (?, ?, ?, ?, ?, ?)");
-  for (const sticker of wm2026Catalog) {
-    insertSticker.run(albumId, sectionIds.get(sticker.sectionCode), sticker.code, String(sticker.number), sticker.label, sticker.sortOrder);
-  }
-
-  db.prepare("INSERT OR IGNORE INTO collections (collector_id, album_id) VALUES (?, ?)").run(collectorId, albumId);
-  const collectionId = (db.prepare("SELECT id FROM collections WHERE collector_id = ? AND album_id = ?").get(collectorId, albumId) as { id: number }).id;
-  const stickers = db.prepare("SELECT id, code FROM stickers WHERE album_id = ?").all(albumId) as Array<{ id: number; code: string }>;
-  const insertHolding = db.prepare("INSERT OR IGNORE INTO holdings (collection_id, sticker_id, quantity) VALUES (?, ?, ?)");
-  for (const sticker of stickers) insertHolding.run(collectionId, sticker.id, initialWm2026Quantity(sticker.code));
+function getActiveCollector(db: Database.Database): { id: number; name: string } {
+  const collector = getCollectorConfig();
+  db.prepare("INSERT OR IGNORE INTO collectors (slug, name) VALUES (?, ?)").run(collector.slug, collector.name);
+  return db.prepare("SELECT id, name FROM collectors WHERE slug = ?").get(collector.slug) as { id: number; name: string };
 }
 
 export function getDb(): Database.Database {
@@ -98,7 +31,6 @@ export function getDb(): Database.Database {
   mkdirSync(dirname(databasePath), { recursive: true });
   database = new Database(databasePath);
   createSchema(database);
-  database.transaction(() => seedWm2026(database!))();
   return database;
 }
 
@@ -119,14 +51,14 @@ const summaryQuery = `
 
 export function getDashboard(): { collector: { id: number; name: string }; albums: AlbumSummary[] } {
   const db = getDb();
-  const collector = db.prepare("SELECT id, name FROM collectors WHERE slug = 'sarah'").get() as { id: number; name: string };
+  const collector = getActiveCollector(db);
   const albums = db.prepare(`${summaryQuery} ORDER BY a.created_at, a.id`).all(collector.id) as AlbumSummary[];
   return { collector, albums };
 }
 
 export function getAlbum(albumId: number): AlbumDetail | null {
   const db = getDb();
-  const collector = db.prepare("SELECT id FROM collectors WHERE slug = 'sarah'").get() as { id: number };
+  const collector = getActiveCollector(db);
   const album = db.prepare(`${summaryQuery} HAVING a.id = ?`).get(collector.id, albumId) as AlbumSummary | undefined;
   if (!album) return null;
 
@@ -162,9 +94,9 @@ export function updateHolding(collectionId: number, stickerId: number, quantity:
   return quantity;
 }
 
-export function createAlbumForSarah(name: string, description: string, stickers: ImportedSticker[]): number {
+export function createAlbumForActiveCollector(name: string, description: string, stickers: ImportedSticker[]): number {
   const db = getDb();
-  const collector = db.prepare("SELECT id FROM collectors WHERE slug = 'sarah'").get() as { id: number };
+  const collector = getActiveCollector(db);
   return db.transaction(() => {
     const baseSlug = slugify(name);
     let slug = baseSlug;

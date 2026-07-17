@@ -35,7 +35,7 @@ export function NewAlbumForm() {
   return (
     <div className="narrow-page stack page-enter">
       <Link href="/" className="back-link">‹ Zurück</Link>
-      <section className="hero"><p className="eyebrow">Neues Album</p><h1>Album importieren</h1><p className="muted">Ein CSV-Katalog legt ein beliebiges neues Album für Sarah an. Alle Sticker starten als fehlend.</p></section>
+      <section className="hero"><p className="eyebrow">Neues Album</p><h1>Album importieren</h1><p className="muted">Ein CSV-Katalog legt ein beliebiges neues Album an. Alle Sticker starten als fehlend.</p></section>
       <form className="form-card" onSubmit={submit}>
         <label><span>Albumname</span><input required minLength={2} maxLength={100} value={name} onChange={(event) => setName(event.target.value)} placeholder="z. B. Bundesliga 2027" /></label>
         <label><span>Beschreibung <small>optional</small></span><input maxLength={240} value={description} onChange={(event) => setDescription(event.target.value)} placeholder="Ausgabe oder Besonderheiten" /></label>

@@ -64,7 +64,7 @@ export function AlbumTracker({ initialAlbum }: { initialAlbum: AlbumDetail }) {
     <div className="stack album-page page-enter">
       <Link href="/" className="back-link">‹ Alle Alben</Link>
       <section className="album-hero">
-        <div><p className="eyebrow">Sarahs Sammlung</p><h1>{initialAlbum.name}</h1><p className="muted">{initialAlbum.description}</p></div>
+        <div><p className="eyebrow">Deine Sammlung</p><h1>{initialAlbum.name}</h1><p className="muted">{initialAlbum.description}</p></div>
         <div className="completion-ring" style={{ "--progress": `${Math.round((stats.owned / stats.total) * 100)}%` } as React.CSSProperties}>
           <strong>{Math.round((stats.owned / stats.total) * 100)}%</strong><span>fertig</span>
         </div>

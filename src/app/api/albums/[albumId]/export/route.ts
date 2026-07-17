@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { escapeCsv } from "@/lib/csv";
-import { getAlbum } from "@/lib/db";
+import { getAlbum, getCollectorConfig } from "@/lib/db";
 
 export const dynamic = "force-dynamic";
 
@@ -8,17 +8,18 @@ export async function GET(request: Request, context: { params: Promise<{ albumId
   const { albumId } = await context.params;
   const album = getAlbum(Number(albumId));
   if (!album) return NextResponse.json({ error: "Album nicht gefunden." }, { status: 404 });
+  const collector = getCollectorConfig();
   const format = new URL(request.url).searchParams.get("format") ?? "csv";
 
   if (format === "json") {
     const body = JSON.stringify({
       exportedAt: new Date().toISOString(),
-      collector: "Sarah",
+      collector: collector.name,
       album: { name: album.name, description: album.description },
       stickers: album.stickers.map(({ code, label, sectionCode, sectionName, quantity }) => ({ code, label, sectionCode, sectionName, quantity })),
     }, null, 2);
     return new NextResponse(body, {
-      headers: { "content-type": "application/json; charset=utf-8", "content-disposition": `attachment; filename="${album.slug}-sarah.json"` },
+      headers: { "content-type": "application/json; charset=utf-8", "content-disposition": `attachment; filename="${album.slug}-${collector.slug}.json"` },
     });
   }
 
@@ -32,6 +33,6 @@ export async function GET(request: Request, context: { params: Promise<{ albumId
     sticker.quantity === 0 ? "fehlt" : sticker.quantity === 1 ? "vorhanden" : "doppelt",
   ].map(escapeCsv).join(","));
   return new NextResponse([header, ...rows].join("\n"), {
-    headers: { "content-type": "text/csv; charset=utf-8", "content-disposition": `attachment; filename="${album.slug}-sarah.csv"` },
+    headers: { "content-type": "text/csv; charset=utf-8", "content-disposition": `attachment; filename="${album.slug}-${collector.slug}.csv"` },
   });
 }
