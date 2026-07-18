@@ -1,4 +1,4 @@
-import { fileURLToPath } from "node:url";
+import path from "node:path";
 
 import { runner, type RunnerOption } from "node-pg-migrate";
 
@@ -8,7 +8,7 @@ import { createPgClientConfig } from "./pool";
 
 export type MigrationDirection = "up" | "down";
 
-const migrationsDirectory = fileURLToPath(new URL("../../../migrations", import.meta.url));
+const migrationsDirectory = path.resolve(process.cwd(), "migrations");
 
 export async function runMigrations(
   environment: AppEnvironment,
