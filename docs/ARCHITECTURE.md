@@ -24,3 +24,9 @@ These rules are enforced by ESLint and by executable boundary tests. Update the 
 PostgreSQL access is asynchronous and uses a bounded `pg` pool. Development reuses a pool through `globalThis` so Next.js hot reloads do not create unbounded connections. Application queries use parameter arrays and the shared query helper. Multi-statement changes use the transaction helper.
 
 Schema changes are forward migrations in the repository's `migrations` directory. The production migration runner uses an advisory lock, validates migration order, and executes pending migrations transactionally. The same runner is used by local commands, automated tests, and deployments.
+
+## Catalog revisions and holdings
+
+An album is a logical catalog. Stable sticker identities belong to that album, while codes, labels, ordering, and section membership belong to a numbered revision. A published revision is structurally immutable; corrections that change structure require a new revision. Existing personal collections remain pinned to their original revision, while new collections select the current published revision.
+
+Holdings are sparse. No row means quantity zero, and only quantities from 1 through 99 are stored. Composite foreign keys guarantee that a holding's sticker belongs to the exact revision selected by its collection. A partial unique index permits at most one active collection per collector and logical album.

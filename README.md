@@ -9,6 +9,7 @@ This branch contains the greenfield v2 implementation. The previous SQLite-based
 The repository currently provides the Next.js application foundation, PostgreSQL persistence infrastructure, and versioned schema migrations. Album catalogs, collectors, authentication, holdings, and trade matching are introduced through the remaining [GitHub Issues](https://github.com/descipar/stickerfolio/issues).
 
 The agreed product and architecture decisions are documented in the [roadmap](docs/ROADMAP.md).
+The provider-neutral catalog interchange contract is documented in the [album template format](docs/ALBUM_TEMPLATE_FORMAT.md).
 
 ## Requirements
 
