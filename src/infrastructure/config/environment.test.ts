@@ -21,6 +21,9 @@ describe("environment configuration", () => {
     expect(environment.database).toEqual({
       url: validEnvironment.DATABASE_URL,
       sslMode: "disable",
+      poolMax: 10,
+      idleTimeoutMs: 30_000,
+      connectionTimeoutMs: 5_000,
     });
     expect(environment.appBaseUrl.href).toBe("http://localhost:3500/");
     expect(environment.registrationMode).toBe("closed");
@@ -33,6 +36,9 @@ describe("environment configuration", () => {
       DATABASE_URL: "postgresql://user:password@db.example.com:5432/stickerfolio",
       DATABASE_SSL_MODE: "verify-full",
       DATABASE_SSL_CA: "example certificate",
+      DATABASE_POOL_MAX: "18",
+      DATABASE_IDLE_TIMEOUT_MS: "45000",
+      DATABASE_CONNECTION_TIMEOUT_MS: "8000",
       REGISTRATION_MODE: "invitation",
       SMTP_HOST: "smtp.example.com",
       SMTP_PORT: "465",
@@ -44,6 +50,9 @@ describe("environment configuration", () => {
 
     expect(environment.database.sslMode).toBe("verify-full");
     expect(environment.database.certificateAuthority).toBe("example certificate");
+    expect(environment.database.poolMax).toBe(18);
+    expect(environment.database.idleTimeoutMs).toBe(45_000);
+    expect(environment.database.connectionTimeoutMs).toBe(8_000);
     expect(environment.smtp).toMatchObject({
       host: "smtp.example.com",
       port: 465,

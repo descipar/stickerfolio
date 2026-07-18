@@ -6,7 +6,7 @@ This branch contains the greenfield v2 implementation. The previous SQLite-based
 
 ## Current status
 
-The repository currently provides the initial Next.js foundation only. Album catalogs, collectors, authentication, PostgreSQL, and trade matching are intentionally implemented through later [GitHub Issues](https://github.com/descipar/stickerfolio/issues).
+The repository currently provides the Next.js application foundation, PostgreSQL persistence infrastructure, and versioned schema migrations. Album catalogs, collectors, authentication, holdings, and trade matching are introduced through the remaining [GitHub Issues](https://github.com/descipar/stickerfolio/issues).
 
 The agreed product and architecture decisions are documented in the [roadmap](docs/ROADMAP.md).
 
@@ -14,6 +14,7 @@ The agreed product and architecture decisions are documented in the [roadmap](do
 
 - Node.js 22 or newer
 - pnpm 11
+- PostgreSQL 17 for development, or Docker for the integration test suite
 
 ## Local development
 
@@ -36,6 +37,7 @@ Optional PostgreSQL TLS and SMTP settings are documented in [.env.example](.env.
 
 ```bash
 pnpm install
+pnpm db:migrate
 pnpm dev
 ```
 
@@ -46,8 +48,21 @@ Open `http://localhost:3500`.
 ```bash
 pnpm lint
 pnpm typecheck
+pnpm test
 pnpm build
 ```
+
+`pnpm test:unit` runs without external services. `pnpm test:integration` starts an isolated PostgreSQL 17 container, applies the production migrations, and exercises real queries and transactions. Docker must be available for that command.
+
+## Database migrations
+
+Apply every pending forward migration before starting a new application version:
+
+```bash
+pnpm db:migrate
+```
+
+For local migration development, `pnpm db:migrate:down` reverts exactly one migration. Production deployments should roll forward with a corrective migration instead of rewriting migration history.
 
 ## Production start
 
@@ -77,4 +92,4 @@ src/
     └── storage/            Optional file-storage adapter
 ```
 
-The module directories are placeholders in the foundation issue. Their public APIs and enforced import boundaries are introduced in the next implementation issue.
+Modules expose their public APIs through their root `index.ts` files. Imports between modules, and direct database access from the UI or HTTP layer, are enforced by ESLint. See [Application architecture](docs/ARCHITECTURE.md) for the dependency graph and persistence rules.

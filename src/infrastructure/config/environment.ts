@@ -21,6 +21,12 @@ const optionalPort = z.preprocess(
   z.coerce.number().int().min(1).max(65_535).default(587),
 );
 
+const positiveInteger = (defaultValue: number, maximum: number) =>
+  z.preprocess(
+    (value) => (typeof value === "string" && value.trim() === "" ? undefined : value),
+    z.coerce.number().int().min(1).max(maximum).default(defaultValue),
+  );
+
 const environmentSchema = z
   .object({
     NODE_ENV: z.enum(["development", "test", "production"]).default("development"),
@@ -49,6 +55,9 @@ const environmentSchema = z
     REGISTRATION_MODE: z.enum(registrationModes).default("closed"),
     DATABASE_SSL_MODE: z.enum(databaseSslModes).default("disable"),
     DATABASE_SSL_CA: optionalText,
+    DATABASE_POOL_MAX: positiveInteger(10, 50),
+    DATABASE_IDLE_TIMEOUT_MS: positiveInteger(30_000, 300_000),
+    DATABASE_CONNECTION_TIMEOUT_MS: positiveInteger(5_000, 60_000),
     SMTP_HOST: optionalText,
     SMTP_PORT: optionalPort,
     SMTP_SECURE: optionalBoolean,
@@ -94,6 +103,9 @@ export interface AppEnvironment {
     url: string;
     sslMode: DatabaseSslMode;
     certificateAuthority?: string;
+    poolMax: number;
+    idleTimeoutMs: number;
+    connectionTimeoutMs: number;
   };
   auth: {
     secret: string;
@@ -132,6 +144,9 @@ export function parseEnvironment(source: Record<string, string | undefined>): Ap
     database: {
       url: value.DATABASE_URL,
       sslMode: value.DATABASE_SSL_MODE,
+      poolMax: value.DATABASE_POOL_MAX,
+      idleTimeoutMs: value.DATABASE_IDLE_TIMEOUT_MS,
+      connectionTimeoutMs: value.DATABASE_CONNECTION_TIMEOUT_MS,
       ...(value.DATABASE_SSL_CA ? { certificateAuthority: value.DATABASE_SSL_CA } : {}),
     },
     auth: { secret: value.BETTER_AUTH_SECRET },
