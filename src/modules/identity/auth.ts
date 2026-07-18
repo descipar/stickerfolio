@@ -41,6 +41,7 @@ export function createAuth(environment: AppEnvironment, pool: Pool) {
       cookieCache: { enabled: false },
     },
     advanced: {
+      database: { generateId: false },
       useSecureCookies: environment.appBaseUrl.protocol === "https:",
       defaultCookieAttributes: {
         httpOnly: true,
