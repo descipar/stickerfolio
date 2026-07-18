@@ -1,0 +1,3 @@
+import { forbidden } from "@/modules/collectors/internal/forbidden";
+
+export const value = forbidden;
