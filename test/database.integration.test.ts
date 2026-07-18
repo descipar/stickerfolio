@@ -4,9 +4,10 @@ import {
   closeDatabasePool,
   getPool,
   query,
-  runMigrations,
   withTransaction,
 } from "@/infrastructure/database";
+import { runMigrations } from "@/infrastructure/database/migrations";
+import { getReadinessStatus } from "@/infrastructure/observability";
 
 import { createTestEnvironment } from "./create-test-environment";
 
@@ -54,6 +55,12 @@ describe("PostgreSQL persistence", () => {
     );
 
     expect(result.rows).toEqual([{ value: "safe parameter" }]);
+  });
+
+  it("reports readiness and the applied schema version", async () => {
+    const status = await getReadinessStatus(getPool(environment));
+
+    expect(status).toEqual({ status: "ready", app: "2.0.0-alpha.0", schema: "000001_initial_identity" });
   });
 
   it("commits successful transactions", async () => {
