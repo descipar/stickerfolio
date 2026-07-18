@@ -41,20 +41,14 @@ jobs:
         run: cp .env.example .env
       - name: Verify the external database deployment has no bundled PostgreSQL service
         run: test "$(docker compose --file compose.external.yml config --services | tr '\n' ' ')" = "migrate app "
-      - name: Build and start a fresh bundled installation
-        run: docker compose up -d --build
-      - name: Wait for application readiness
+      - name: Run the one-command first start
+        run: ./start.sh
+      - name: Verify application readiness and empty catalog availability
         run: |
-          for attempt in $(seq 1 30); do
-            if curl --fail --silent http://localhost:3500/api/health/ready; then
-              exit 0
-            fi
-            sleep 2
-          done
-          docker compose logs
-          exit 1
-      - name: Load the optional World Cup 2026 catalog explicitly
-        run: docker compose run --rm app node node_modules/tsx/dist/cli.mjs scripts/seed-wm2026.ts
+          curl --fail --silent http://localhost:3500/api/health/ready
+          test "$(docker compose exec -T postgres psql --username stickerfolio --dbname stickerfolio --tuples-only --no-align --command "SELECT count(*) FROM albums WHERE slug = 'panini-world-cup-2026'")" = "1"
+          test "$(docker compose exec -T postgres psql --username stickerfolio --dbname stickerfolio --tuples-only --no-align --command "SELECT count(*) FROM collector_profiles")" = "0"
+          test "$(docker compose exec -T postgres psql --username stickerfolio --dbname stickerfolio --tuples-only --no-align --command "SELECT count(*) FROM holdings")" = "0"
       - name: Verify persistent data survives an app rebuild
         run: docker compose up -d --build app
       - name: Back up and restore into an empty database

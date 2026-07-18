@@ -2,6 +2,28 @@
 
 Stickerfolio is a portable, mobile-first sticker album tracker for multiple authenticated collectors.
 
+## Quick start on Raspberry Pi
+
+With Docker and Docker Compose installed, a fresh installation needs only:
+
+```bash
+git clone https://github.com/descipar/stickerfolio.git
+cd stickerfolio
+./start.sh
+```
+
+The script detects the Raspberry Pi address, generates private database and authentication secrets, builds and starts the containers, applies migrations, and loads the empty World Cup 2026 catalog. It creates no collector, personal album, holding, duplicate, or example holding. In particular, the optional example holdings dataset is never loaded by this script.
+
+At the end, the script prints the application URL and the restricted bootstrap login. The initial administrator must change the temporary password before using the administration area.
+
+If automatic address detection is unsuitable, provide the externally used URL explicitly:
+
+```bash
+STICKERFOLIO_URL=http://192.168.20.102:3500 ./start.sh
+```
+
+Running `./start.sh` again is safe: existing secrets and PostgreSQL data are retained, and the catalog seed is idempotent.
+
 ## Current status
 
 The repository contains the first usable MVP: PostgreSQL persistence, Better Auth sessions, administrator-managed user accounts, multiple personal albums, mobile sticker search and filters, and quantity tracking from zero through 99. Trade matching, self-registration, invitations, and catalog administration remain on the [GitHub roadmap](https://github.com/descipar/stickerfolio/issues).
