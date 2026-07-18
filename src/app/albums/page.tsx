@@ -1,4 +1,5 @@
 import { headers } from "next/headers";
+import Link from "next/link";
 import { redirect } from "next/navigation";
 
 import { AlbumsOverview } from "@/components/albums-overview";
@@ -13,14 +14,11 @@ export default async function AlbumsPage() {
   return (
     <main className="page-shell">
       <header className="app-header">
-        <div>
-          <p className="eyebrow">Stickerfolio</p>
-          <h1 className="page-title">Albums</h1>
-        </div>
-        <AppNavigation isAdmin={identity.role === "admin"} />
+        <Link className="brand-link" href="/albums"><span aria-hidden="true">S</span><strong>Stickerfolio</strong></Link>
+        <AppNavigation isAdmin={identity.role === "admin"} displayName={identity.collector?.displayName} />
       </header>
       {identity.collector
-        ? <AlbumsOverview />
+        ? <AlbumsOverview displayName={identity.collector.displayName} />
         : identity.role === "admin"
           ? (
               <section className="card empty-state">
