@@ -19,6 +19,16 @@ export interface SeedResult {
   stickers: number;
 }
 
+export interface PublishedAlbumSummary {
+  id: string;
+  slug: string;
+  title: string;
+  description: string | null;
+  revisionId: string;
+  revisionNumber: number;
+  stickerCount: number;
+}
+
 async function insertTemplate(client: PoolClient, template: AlbumTemplate): Promise<SeedResult> {
   const existing = await query<{ album_id: string; revision_number: number; status: string }>(
     `SELECT album_id, revision_number, status FROM album_revisions WHERE id = $1`,
@@ -147,4 +157,37 @@ export async function getCurrentRevision(
   );
   const revision = result.rows[0];
   return revision ? { id: revision.id, revisionNumber: revision.revision_number } : null;
+}
+
+export async function listPublishedAlbums(
+  executor?: QueryExecutor,
+): Promise<PublishedAlbumSummary[]> {
+  const result = await query<{
+    id: string;
+    slug: string;
+    title: string;
+    description: string | null;
+    revision_id: string;
+    revision_number: number;
+    sticker_count: number;
+  }>(
+    `SELECT a.id, a.slug, a.title, a.description, r.id AS revision_id,
+            r.revision_number, count(rs.sticker_id)::integer AS sticker_count
+       FROM albums a
+       JOIN album_revisions r ON r.album_id = a.id AND r.status = 'published'
+       JOIN album_revision_stickers rs ON rs.revision_id = r.id
+      GROUP BY a.id, r.id
+      ORDER BY a.title, a.id`,
+    [],
+    executor,
+  );
+  return result.rows.map((row) => ({
+    id: row.id,
+    slug: row.slug,
+    title: row.title,
+    description: row.description,
+    revisionId: row.revision_id,
+    revisionNumber: row.revision_number,
+    stickerCount: row.sticker_count,
+  }));
 }

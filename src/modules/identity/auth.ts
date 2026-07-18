@@ -3,6 +3,7 @@ import { betterAuth } from "better-auth";
 
 import { getEnvironment, type AppEnvironment } from "@/infrastructure/config";
 import { getPool } from "@/infrastructure/database";
+import { query } from "@/infrastructure/database";
 
 import { hashPassword, verifyPassword } from "./password";
 
@@ -39,6 +40,20 @@ export function createAuth(environment: AppEnvironment, pool: Pool) {
       expiresIn: 60 * 60 * 24 * 7,
       updateAge: 60 * 60 * 24,
       cookieCache: { enabled: false },
+    },
+    databaseHooks: {
+      session: {
+        create: {
+          before: async (session) => {
+            const user = await query<{ status: string }>(
+              `SELECT status FROM "user" WHERE id = $1`,
+              [session.userId],
+              pool,
+            );
+            return user.rows[0]?.status === "active";
+          },
+        },
+      },
     },
     advanced: {
       database: { generateId: false },

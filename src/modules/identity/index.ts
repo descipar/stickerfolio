@@ -11,3 +11,10 @@ export {
   type IdentityContext,
   type UserRole,
 } from "./profiles";
+export { changeOwnPassword } from "./change-password";
+export {
+  AuthenticationError,
+  requireCollector,
+  requireIdentity,
+  resolveIdentity,
+} from "./session";

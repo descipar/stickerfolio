@@ -1,1 +1,4 @@
-export {};
+export {
+  requireCollectorContext,
+  type CollectorContext,
+} from "./session";

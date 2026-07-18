@@ -140,6 +140,7 @@ export async function loadCollectionStickers(
     [collectionId, collectorId],
     executor,
   );
+  if (result.rows.length === 0) throw new CollectionError("Collection not found.");
   return result.rows.map((row) => ({
     id: row.id,
     code: row.code,
