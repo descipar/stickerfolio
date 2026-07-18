@@ -4,10 +4,19 @@ Stickerfolio is a portable, mobile-first sticker album tracker for multiple auth
 
 ## Quick start on Raspberry Pi
 
-With Docker and Docker Compose installed, a fresh installation needs only:
+GitHub no longer accepts account passwords for Git operations. Because this repository is private, configure a read-only SSH deploy key once on the Raspberry Pi:
 
 ```bash
-git clone https://github.com/descipar/stickerfolio.git
+test -f ~/.ssh/id_ed25519 || ssh-keygen -t ed25519 -C "stickerfolio-rpi"
+cat ~/.ssh/id_ed25519.pub
+```
+
+Accept the suggested key location and leave the passphrase empty so unattended updates remain possible. Add the displayed public key in the GitHub repository under **Settings → Deploy keys → Add deploy key**. Do not enable write access.
+
+After that one-time setup, a fresh installation needs only:
+
+```bash
+git clone git@github.com:descipar/stickerfolio.git
 cd stickerfolio
 ./start.sh
 ```
