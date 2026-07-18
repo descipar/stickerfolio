@@ -1,34 +1,40 @@
 # Stickerfolio
 
-Stickerfolio ist eine selbst gehostete, für Smartphones optimierte Verwaltung für Stickeralben. Sammler werden direkt in der App angelegt und ausgewählt. Die Anwendung kommt ohne Anmeldung aus und ist für den Betrieb im Heimnetz oder über VPN ausgelegt.
+Stickerfolio is a self-hosted, smartphone-optimized tracker for sticker albums. Collectors are created and selected directly in the application. The current version does not require authentication and is intended for use on a home network or through a VPN.
 
-## Funktionen
+## Features
 
-- Mehrere Sammler mit jeweils eigenen Alben und Beständen.
-- Fehlende Sticker lassen sich mit einem Tipp als vorhanden markieren.
-- Die Anzahl vorhandener Exemplare und Doubletten kann erhöht oder reduziert werden.
-- Suche nach Stickercode, Bereich oder Team.
-- Filter für fehlende, vorhandene und doppelte Sticker.
-- Fortschritt insgesamt und je Bereich.
-- Neue, beliebige Alben per CSV importieren.
-- Bestände als CSV oder JSON exportieren.
-- Erweiterbares Datenmodell für mehrere Sammler.
-- Mobile Web-App für den iPhone-Home-Bildschirm.
+- Multiple collectors with separate albums and holdings.
+- Mark missing stickers as owned with one tap.
+- Increase or decrease owned quantities and duplicates.
+- Search by sticker code, section, or team.
+- Filter missing, owned, and duplicate stickers.
+- Show overall progress and progress per section.
+- Import arbitrary albums from CSV.
+- Export holdings as CSV or JSON.
+- Extensible data model for multiple collectors.
+- Mobile web app for the iPhone home screen.
 
-Eine neue Installation startet ohne Album und ohne Stickerbestand. Sarahs Stand des Albums „Panini WM 2026“ vom 16.07.2026 kann bei Bedarf ausdrücklich über das mitgelieferte Seed-Skript geladen werden. Hinweise auf mögliche Tauschaktionen werden bewusst nicht als eigener Zustand übernommen.
+A new installation starts without albums or sticker holdings. Sarah's prepared state for the “Panini World Cup 2026” album from July 16, 2026 can be loaded explicitly with the included seed script. Notes about potential trades are intentionally not imported as application state.
 
-## Lokal entwickeln
+## Roadmap
 
-Voraussetzungen: Node.js 22 und pnpm 11.
+The planned greenfield rewrite as a portable multi-user application with PostgreSQL, authentication, administration, a shared album catalog, and trade-partner matching is described in the [product and architecture roadmap](docs/ROADMAP.md). It contains the agreed architecture and product decisions and is the foundation for the new implementation.
+
+Implementation work is tracked through the repository's [GitHub Issues](https://github.com/descipar/stickerfolio/issues).
+
+## Local development
+
+Requirements: Node.js 22 and pnpm 11.
 
 ```bash
 pnpm install
 pnpm dev
 ```
 
-Die Anwendung ist anschließend unter `http://localhost:3000` erreichbar. Die lokale Datenbank wird unter `data/stickerfolio.db` angelegt. Beim ersten Aufruf wird der erste Sammler in der App angelegt.
+The application is then available at `http://localhost:3000`. The local database is created at `data/stickerfolio.db`. The first collector is created in the application on first use.
 
-Nach dem Anlegen von Sarah in der App kann ihr vorbereiteter WM-2026-Startbestand lokal geladen werden:
+After creating Sarah in the application, her prepared World Cup 2026 holdings can be loaded locally:
 
 ```bash
 pnpm seed:sarah -- --collector sarah
@@ -36,16 +42,16 @@ pnpm seed:sarah -- --collector sarah
 
 ## Raspberry Pi 4
 
-Empfohlen wird Raspberry Pi OS 64-Bit mit Docker und Docker Compose.
+Raspberry Pi OS 64-bit with Docker and Docker Compose is recommended.
 
-Da das Repository privat ist, funktioniert das GitHub-Account-Passwort beim Klonen nicht. Empfohlen wird der Zugriff per SSH. Auf dem Raspberry Pi wird dafür einmalig ein Schlüssel erzeugt:
+Because the repository is private, the GitHub account password cannot be used for cloning. SSH is recommended. Generate a key on the Raspberry Pi once:
 
 ```bash
 ssh-keygen -t ed25519 -C "stickerfolio-raspberry-pi"
 cat ~/.ssh/id_ed25519.pub
 ```
 
-Den ausgegebenen öffentlichen Schlüssel anschließend bei GitHub unter **Settings → SSH and GPG keys → New SSH key** hinterlegen. Danach kann die Verbindung geprüft und das Repository geklont werden:
+Add the displayed public key to GitHub under **Settings → SSH and GPG keys → New SSH key**. Then verify the connection and clone the repository:
 
 ```bash
 ssh -T git@github.com
@@ -55,25 +61,25 @@ docker compose build --pull
 docker compose up -d
 ```
 
-Der Container startet ohne Sammler und Albumdaten. Zuerst Stickerfolio im Browser öffnen und Sarah unter **Sammler anlegen** eintragen. Die dort angezeigte Kennung wird anschließend an das Seed-Skript übergeben:
+The container starts without collector or album data. Open Stickerfolio in a browser, create Sarah in collector management, and pass the displayed identifier to the seed script:
 
 ```bash
 docker compose exec app node seed/scripts/seed-sarah.js --collector sarah
 ```
 
-Das Skript legt keinen Sammler an. Es lädt Sarahs WM-2026-Stand ausschließlich für den angegebenen, bereits vorhandenen Sammler. Es kann gefahrlos erneut aufgerufen werden; vorhandene Stickerbestände werden nicht überschrieben.
+The script does not create a collector. It loads Sarah's World Cup 2026 holdings only for the specified existing collector. It is safe to run again; existing holdings are not overwritten.
 
-Alternativ ist HTTPS mit einem [Fine-grained Personal Access Token](https://github.com/settings/personal-access-tokens/new) möglich. Der Token benötigt für `descipar/stickerfolio` nur **Contents: Read-only**. Beim folgenden Befehl wird als Benutzername `descipar` und bei der Passwortabfrage der Token eingegeben – nicht das GitHub-Passwort:
+Alternatively, clone over HTTPS with a [fine-grained personal access token](https://github.com/settings/personal-access-tokens/new). The token needs only **Contents: Read-only** access to `descipar/stickerfolio`. Use `descipar` as the username and enter the token, not the GitHub password, when prompted for a password:
 
 ```bash
 git clone https://github.com/descipar/stickerfolio.git
 ```
 
-Auf dem iPhone wird Stickerfolio über `http://<IP-DES-PI>:3500` oder `http://raspberrypi.local:3500` geöffnet. In Safari kann die Seite über „Teilen“ → „Zum Home-Bildschirm“ als Web-App abgelegt werden.
+On iPhone, open Stickerfolio at `http://<RASPBERRY-PI-IP>:3500` or `http://raspberrypi.local:3500`. In Safari, use **Share → Add to Home Screen** to install it as a web app.
 
-### Aktualisieren
+### Updating
 
-Stickerfolio wird immer direkt auf dem Raspberry Pi aus dem aktuellen Quellcode gebaut. Vor einem Update zuerst ein Backup erstellen, anschließend den Quellcode aktualisieren und das Image neu bauen:
+Stickerfolio is always built from the current source code directly on the Raspberry Pi. Create a backup before updating, pull the source, and rebuild the image:
 
 ```bash
 cd stickerfolio
@@ -84,60 +90,60 @@ docker compose up -d
 docker compose ps
 ```
 
-`docker compose build --pull` lädt nur die aktuellen Basis-Images wie Node.js und baut Stickerfolio anschließend lokal. Es wird kein fertiges Stickerfolio-Image aus GitHub oder GHCR heruntergeladen. Die Datenbank im Ordner `data/` bleibt dabei erhalten.
+`docker compose build --pull` downloads only current base images such as Node.js and then builds Stickerfolio locally. It does not download a prebuilt Stickerfolio image from GitHub or GHCR. The database in `data/` is preserved.
 
-### Vollständig zurücksetzen
+### Full reset
 
-Dieser Befehl entfernt den Container, das lokal gebaute Image sowie sämtliche Sammler-, Album- und Bestandsdaten. Anschließend wird Stickerfolio neu gebaut und vollständig leer gestartet:
+The following command removes the container, locally built image, and all collector, album, and holding data. Stickerfolio is then rebuilt and started completely empty:
 
 ```bash
 ./scripts/reset.sh
 ```
 
-Danach wird der erste Sammler wieder direkt in der App angelegt. Das Seed-Skript wird nur ausgeführt, wenn der vorbereitete Sarah-Bestand ausdrücklich geladen werden soll.
+Create the first collector in the application again. Run the seed only when Sarah's prepared holdings should be loaded explicitly.
 
-### Sammler verwalten
+### Managing collectors
 
-Sammler werden ausschließlich über die App verwaltet. Über den Namen oben rechts kann die Sammler-Verwaltung geöffnet werden. Dort lassen sich weitere Sammler anlegen und der aktive Sammler wechseln. Die Auswahl wird im Browser gespeichert; Docker oder `compose.yaml` müssen dafür nicht verändert werden.
+Collectors are managed exclusively through the application. Open collector management through the name in the upper-right corner. Additional collectors can be created there, and the active collector can be changed. The browser stores the selection; Docker and `compose.yaml` do not need to be changed.
 
-## Daten und Backup
+## Data and backup
 
-Die SQLite-Datenbank liegt dauerhaft im Ordner `data/` neben der Compose-Datei. Sie wird nicht in ein Docker-Image eingebaut und bleibt bei Updates erhalten.
+The SQLite database is stored persistently in `data/` next to the Compose file. It is not included in the Docker image and survives updates.
 
-Bei einer bestehenden Installation bleiben bereits geladene Sarah-Daten durch diese Änderung erhalten. Nur eine neu angelegte Datenbank startet ohne Albumdaten.
+Existing installations retain previously loaded Sarah data. Only a newly created database starts without album data.
 
-Ein konsistentes Backup kann so erstellt werden:
+Create a consistent backup with:
 
 ```bash
 ./scripts/backup.sh
 ```
 
-Zusätzlich kann jedes Album direkt in der Oberfläche als CSV oder JSON exportiert werden.
+Each album can also be exported directly from the application as CSV or JSON.
 
-## Weitere Alben importieren
+## Importing additional albums
 
-Die CSV muss UTF-8-kodiert sein und diese Spalten enthalten:
+The CSV file must use UTF-8 and contain these columns:
 
 ```csv
 section_code,section_name,sticker_code,sticker_number,label
-GER,Deutschland,GER1,1,Sticker GER1
-GER,Deutschland,GER2,2,Sticker GER2
+GER,Germany,GER1,1,Sticker GER1
+GER,Germany,GER2,2,Sticker GER2
 ```
 
-`section` ist absichtlich allgemein gehalten und kann ein Team, eine Albumseite oder jede andere Kategorie darstellen. Neue Sticker starten als fehlend.
+`section` is intentionally generic and may represent a team, album page, or any other category. Newly imported stickers start as missing.
 
-## Datenmodell
+## Data model
 
-- `collectors`: Sammler
-- `albums`: Albumkataloge
-- `sections`: Teams, Seiten oder Kategorien
-- `stickers`: Sticker eines Albums
-- `collections`: Zuordnung eines Albums zu einem Sammler
-- `holdings`: Anzahl eines Stickers in einer Sammlung
+- `collectors`: collectors
+- `albums`: album catalogs
+- `sections`: teams, pages, or categories
+- `stickers`: stickers in an album
+- `collections`: assignment of an album to a collector
+- `holdings`: quantity of a sticker in a collection
 
-Der aktive Sammler wird in der App ausgewählt und in einem Browser-Cookie gespeichert. Alben und Bestände bleiben in der SQLite-Datenbank sauber nach Sammlern getrennt.
+The active collector is selected in the application and stored in a browser cookie. Albums and holdings remain separated by collector in the SQLite database.
 
-## Qualitätssicherung
+## Quality assurance
 
 ```bash
 pnpm test
