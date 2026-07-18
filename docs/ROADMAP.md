@@ -29,14 +29,14 @@ Stickerfolio is currently a mobile, self-hosted Next.js application with these p
 - There are no user accounts, authentication, or permissions.
 - The active collector is selected only through a browser cookie.
 - Data is currently stored in SQLite.
-- Sarah's prepared World Cup 2026 holdings can be loaded explicitly through a seed script.
+- Prepared example holdings can be loaded explicitly through an optional seed script.
 
 The existing source code is not the technical foundation of the rewrite. Only domain knowledge and verified source data are carried forward:
 
 - Quantities from `0` through `99` have proven to be an understandable inventory model.
 - Generic album sections work for teams, pages, and other categories.
 - Mobile search, filters, and direct quantity changes are core workflows.
-- The existing World Cup 2026 template and Sarah's prepared holdings will be transferred into new seed data.
+- The existing World Cup 2026 template and verified example holdings may be transferred into portable seed data.
 
 The SQLite schema, synchronous data access, previous API contracts, cookie-based collector selection, and previous directory structure will not be retained. The new application therefore requires no compatibility layer for an architecture that predates user accounts and a shared catalog.
 
@@ -293,7 +293,7 @@ A template revision contains:
 - ordered sections such as teams, pages, or categories,
 - a complete mapping of included stable sticker IDs to codes and sections.
 
-The World Cup 2026 album exists once as a shared logical album. Sarah, Matthias, Lisa, and other collectors each own a personal collection referencing one concrete published revision.
+The World Cup 2026 album exists once as a shared logical album. Every collector owns a separate personal collection referencing one concrete published revision.
 
 #### Rationale
 
@@ -609,7 +609,7 @@ Seeds deliberately create domain starting data and never run automatically at co
 Planned seeds:
 
 - World Cup 2026 catalog seed: creates the shared template, sections, and stickers.
-- Sarah seed: attaches Sarah's prepared holdings to an explicitly selected account or collector profile already created in the app.
+- Example holdings seed: attaches prepared sample holdings to an explicitly selected account or collector profile already created in the app.
 
 Seed requirements:
 
@@ -737,7 +737,7 @@ Outcome: the new foundation runs entirely on PostgreSQL with no production SQLit
 - model logical albums, immutable revisions, and concrete collection revisions,
 - provide the World Cup 2026 catalog seed,
 - transfer verified source data into the new seed format,
-- recreate the Sarah seed for an existing account,
+- provide an optional example holdings seed for an existing account,
 - create new collections from templates,
 - store holdings only above quantity `0`,
 - allow multiple albums per collector,
@@ -878,7 +878,7 @@ The multi-user MVP is complete when:
 2. Documented Docker Compose operation with app and PostgreSQL works.
 3. External PostgreSQL can be configured as an alternative.
 4. A fresh installation starts without collector or album data and with exactly one first-admin account restricted until its password changes.
-5. The World Cup 2026 catalog and Sarah's holdings load only through explicit seeds.
+5. The World Cup 2026 catalog and optional example holdings load only through explicit seeds.
 6. Users can register, sign in, and sign out.
 7. An administrator can manage users and album templates.
 8. A new user can select a predefined album during onboarding.
