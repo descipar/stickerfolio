@@ -9,3 +9,8 @@ export {
   type CollectionSticker,
   type CollectionSummary,
 } from "./repository";
+export {
+  seedExampleHoldings,
+  type ExampleHoldingsDataset,
+  type ExampleHoldingsSeedResult,
+} from "./seed-example-holdings";

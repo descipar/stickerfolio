@@ -28,7 +28,7 @@ COPY --from=build --chown=node:node /app/.next ./.next
 COPY --from=build --chown=node:node /app/package.json /app/tsconfig.json /app/next.config.ts ./
 COPY --from=build --chown=node:node /app/migrations ./migrations
 COPY --from=build --chown=node:node /app/scripts ./scripts
-COPY --from=build --chown=node:node /app/src/infrastructure ./src/infrastructure
+COPY --from=build --chown=node:node /app/src ./src
 USER node
 EXPOSE 3500
 CMD ["node", "node_modules/next/dist/bin/next", "start", "--port", "3500"]
