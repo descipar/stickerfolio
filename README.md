@@ -73,6 +73,14 @@ pnpm start
 
 The production server listens on port `3500`.
 
+## Health and version endpoints
+
+- `GET /api/health/live` reports process liveness without contacting PostgreSQL.
+- `GET /api/health/ready` verifies PostgreSQL connectivity and the migrated schema.
+- `GET /api/version` exposes the application and schema versions for operational diagnostics.
+
+Responses are never cached. Operational events are written as structured JSON and redact credential fields, tokens, and complete PostgreSQL connection URLs.
+
 ## Project structure
 
 ```text

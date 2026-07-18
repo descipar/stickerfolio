@@ -1,5 +1,6 @@
-import { closeDatabasePool, runMigrations } from "@/infrastructure/database";
+import { closeDatabasePool } from "@/infrastructure/database";
 import { getEnvironment } from "@/infrastructure/config";
+import { runMigrations } from "@/infrastructure/database/migrations";
 
 const direction = process.argv[2] === "down" ? "down" : "up";
 

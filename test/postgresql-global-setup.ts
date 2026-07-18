@@ -1,7 +1,7 @@
 import { PostgreSqlContainer } from "@testcontainers/postgresql";
 import type { TestProject } from "vitest/node";
 
-import { runMigrations } from "@/infrastructure/database";
+import { runMigrations } from "@/infrastructure/database/migrations";
 
 import { createTestEnvironment } from "./create-test-environment";
 
