@@ -5,19 +5,20 @@ ENV PATH="$PNPM_HOME:$PATH"
 RUN corepack enable
 WORKDIR /app
 
-FROM base AS production-dependencies
-COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
-RUN --mount=type=cache,id=pnpm,target=/pnpm/store pnpm install --frozen-lockfile --prod
-
-FROM base AS build
+FROM base AS dependencies
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 RUN --mount=type=cache,id=pnpm,target=/pnpm/store pnpm install --frozen-lockfile
+
+FROM dependencies AS build
 COPY . .
 ENV DATABASE_URL="postgresql://build:build@localhost:5432/build"
 ENV APP_BASE_URL="http://localhost:3500"
 ENV BETTER_AUTH_SECRET="docker-build-only-secret-with-at-least-32-characters"
 ENV REGISTRATION_MODE="closed"
 RUN pnpm build
+
+FROM dependencies AS production-dependencies
+RUN pnpm prune --prod
 
 FROM node:22-alpine AS runtime
 ENV NODE_ENV="production"
