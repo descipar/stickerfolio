@@ -1,31 +1,27 @@
 {
   "name": "stickerfolio",
-  "version": "0.1.0",
+  "version": "2.0.0-alpha.0",
   "private": true,
-  "description": "Self-hosted, mobile-friendly sticker album tracker supporting multiple collectors and albums.",
+  "description": "A portable, mobile-first sticker album tracker for multiple collectors.",
   "scripts": {
-    "dev": "next dev",
+    "dev": "next dev --port 3500",
     "build": "next build",
-    "start": "next start",
-    "seed:build": "tsc -p tsconfig.seed.json",
-    "seed:sarah": "pnpm seed:build && node dist-seed/scripts/seed-sarah.js",
-    "typecheck": "tsc --noEmit",
-    "test": "vitest run"
+    "start": "next start --port 3500",
+    "lint": "eslint .",
+    "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "better-sqlite3": "12.11.1",
     "next": "16.2.10",
     "react": "19.2.7",
-    "react-dom": "19.2.7",
-    "zod": "4.4.3"
+    "react-dom": "19.2.7"
   },
   "devDependencies": {
-    "@types/better-sqlite3": "7.6.13",
-    "@types/node": "26.1.1",
+    "@types/node": "^22.19.0",
     "@types/react": "19.2.17",
     "@types/react-dom": "19.2.3",
-    "typescript": "^5.9.3",
-    "vitest": "4.1.10"
+    "eslint": "9.39.5",
+    "eslint-config-next": "16.2.10",
+    "typescript": "^5.9.3"
   },
-  "packageManager": "pnpm@11.9.0"
+  "packageManager": "pnpm@11.14.0"
 }

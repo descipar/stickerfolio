@@ -1,34 +1,27 @@
-name: Test
+name: CI
 
 on:
   push:
-    branches: [main]
+    branches: [v2]
   pull_request:
-    branches: [main]
+    branches: [v2]
 
 permissions:
   contents: read
 
 jobs:
-  test:
+  quality:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
         with:
-          version: 11.9.0
+          version: 11.14.0
       - uses: actions/setup-node@v4
         with:
           node-version: 22
           cache: pnpm
       - run: pnpm install --frozen-lockfile
-      - run: pnpm test
+      - run: pnpm lint
       - run: pnpm typecheck
       - run: pnpm build
-
-  docker:
-    needs: test
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - run: docker build --tag stickerfolio:test .
