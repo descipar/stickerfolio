@@ -17,6 +17,23 @@ The agreed product and architecture decisions are documented in the [roadmap](do
 
 ## Local development
 
+Create a local environment file from the committed placeholder configuration and replace the example values:
+
+```bash
+cp .env.example .env.local
+```
+
+Generate a dedicated authentication secret with a password manager or a cryptographically secure random generator. Never reuse the placeholder value outside local development.
+
+The required settings are:
+
+- `DATABASE_URL`: bundled or external PostgreSQL connection URL
+- `APP_BASE_URL`: public HTTP or HTTPS origin of this installation
+- `BETTER_AUTH_SECRET`: random secret with at least 32 characters
+- `REGISTRATION_MODE`: `closed`, `invitation`, or `open`
+
+Optional PostgreSQL TLS and SMTP settings are documented in [.env.example](.env.example). Invalid or missing required configuration stops server startup with a redacted error message.
+
 ```bash
 pnpm install
 pnpm dev

@@ -2,9 +2,9 @@ name: CI
 
 on:
   push:
-    branches: [v2]
+    branches: [main]
   pull_request:
-    branches: [v2]
+    branches: [main]
 
 permissions:
   contents: read
@@ -12,6 +12,11 @@ permissions:
 jobs:
   quality:
     runs-on: ubuntu-latest
+    env:
+      DATABASE_URL: postgresql://stickerfolio:ci-only@localhost:5432/stickerfolio
+      APP_BASE_URL: http://localhost:3500
+      BETTER_AUTH_SECRET: ci-only-secret-with-at-least-32-characters
+      REGISTRATION_MODE: closed
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
@@ -24,4 +29,5 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: pnpm lint
       - run: pnpm typecheck
+      - run: pnpm test
       - run: pnpm build
