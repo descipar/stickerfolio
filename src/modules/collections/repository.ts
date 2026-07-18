@@ -16,6 +16,7 @@ export interface CollectionSummary {
   revisionId: string;
   revisionNumber: number;
   owned: number;
+  duplicates: number;
   total: number;
 }
 
@@ -53,10 +54,12 @@ export async function listCollections(
     revision_id: string;
     revision_number: number;
     owned: number;
+    duplicates: number;
     total: number;
   }>(
     `SELECT c.id, c.album_id, a.title AS album_title, c.revision_id, r.revision_number,
             count(h.sticker_id)::integer AS owned,
+            COALESCE(sum(GREATEST(h.quantity - 1, 0)), 0)::integer AS duplicates,
             count(rs.sticker_id)::integer AS total
        FROM collections c
        JOIN albums a ON a.id = c.album_id
@@ -77,6 +80,7 @@ export async function listCollections(
     revisionId: row.revision_id,
     revisionNumber: row.revision_number,
     owned: row.owned,
+    duplicates: row.duplicates,
     total: row.total,
   }));
 }

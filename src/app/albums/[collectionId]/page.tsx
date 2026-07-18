@@ -16,12 +16,10 @@ export default async function CollectionPage({ params }: { params: Promise<{ col
   return (
     <main className="page-shell wide-shell">
       <header className="app-header">
-        <div>
-          <Link className="back-link" href="/albums">← Albums</Link>
-          <h1 className="page-title">Stickers</h1>
-        </div>
-        <AppNavigation isAdmin={identity.role === "admin"} />
+        <Link className="brand-link" href="/albums"><span aria-hidden="true">S</span><strong>Stickerfolio</strong></Link>
+        <AppNavigation isAdmin={identity.role === "admin"} displayName={identity.collector.displayName} />
       </header>
+      <Link className="back-link" href="/albums">← All albums</Link>
       <CollectionView collectionId={collectionId} />
     </main>
   );

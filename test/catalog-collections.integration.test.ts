@@ -71,6 +71,9 @@ describe("revision-aware catalog and sparse collections", () => {
     await setHoldingQuantity(collectorId, collectionId, firstStickerId, 2, pool);
     let stickers = await loadCollectionStickers(collectorId, collectionId, pool);
     expect(stickers.find((sticker) => sticker.id === firstStickerId)?.quantity).toBe(2);
+    await expect(listCollections(collectorId, pool)).resolves.toEqual([
+      expect.objectContaining({ owned: 1, duplicates: 1, total: 2 }),
+    ]);
 
     await setHoldingQuantity(collectorId, collectionId, firstStickerId, 0, pool);
     stickers = await loadCollectionStickers(collectorId, collectionId, pool);
