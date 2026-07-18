@@ -26,8 +26,8 @@ async function createIfEmpty(client: PoolClient): Promise<{ created: boolean; us
   const userId = user.rows[0]!.id;
   await query(
     `INSERT INTO account ("accountId", "providerId", "userId", password, "createdAt", "updatedAt")
-     VALUES ($1, 'credential', $1, $2, now(), now())`,
-    [userId, passwordHash],
+     VALUES ($1, 'credential', $2, $3, now(), now())`,
+    [userId, userId, passwordHash],
     client,
   );
   return { created: true, userId };
