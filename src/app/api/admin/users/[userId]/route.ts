@@ -6,6 +6,7 @@ import {
   setManagedUserRole,
   setManagedUserStatus,
 } from "@/modules/admin";
+import { maximumPasswordLength, minimumPasswordLength } from "@/shared/password-policy";
 
 import { apiError } from "../../../http";
 
@@ -13,7 +14,10 @@ const idSchema = z.uuid();
 const mutationSchema = z.discriminatedUnion("action", [
   z.object({ action: z.literal("status"), status: z.enum(["active", "suspended"]) }),
   z.object({ action: z.literal("role"), role: z.enum(["user", "admin"]) }),
-  z.object({ action: z.literal("reset-password"), password: z.string().min(10).max(128) }),
+  z.object({
+    action: z.literal("reset-password"),
+    password: z.string().min(minimumPasswordLength).max(maximumPasswordLength),
+  }),
 ]);
 
 export async function PATCH(

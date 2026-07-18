@@ -1,5 +1,6 @@
 export {
   AdminError,
+  changeOwnAdminEmail,
   createManagedUser,
   listManagedUsers,
   resetManagedUserPassword,

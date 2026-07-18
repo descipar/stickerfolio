@@ -2,13 +2,14 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 
 import { createManagedUser, listManagedUsers } from "@/modules/admin";
+import { maximumPasswordLength, minimumPasswordLength } from "@/shared/password-policy";
 
 import { apiError } from "../../http";
 
 const createSchema = z.object({
   email: z.email().max(254),
   displayName: z.string().trim().min(1).max(100),
-  initialPassword: z.string().min(10).max(128),
+  initialPassword: z.string().min(minimumPasswordLength).max(maximumPasswordLength),
   role: z.enum(["user", "admin"]).default("user"),
 });
 

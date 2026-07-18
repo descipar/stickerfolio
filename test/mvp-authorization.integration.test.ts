@@ -3,6 +3,7 @@ import { afterAll, beforeAll, describe, expect, inject, it } from "vitest";
 import { createPool, query } from "@/infrastructure/database";
 import {
   AdminError,
+  changeOwnAdminEmail,
   createManagedUser,
   listManagedUsers,
   resetManagedUserPassword,
@@ -90,13 +91,13 @@ describe("MVP authentication, administration, and collection authorization", () 
     await changeOwnPassword(
       initial.headers,
       bootstrapAdminPassword,
-      "A-new-admin-password!",
+      "A2!bc",
       auth,
       pool,
     );
     const initialPassword = await signIn(bootstrapAdminEmail, bootstrapAdminPassword);
     expect(initialPassword.response.status).not.toBe(200);
-    const changed = await signIn(bootstrapAdminEmail, "A-new-admin-password!");
+    const changed = await signIn(bootstrapAdminEmail, "A2!bc");
     expect(changed.response.status).toBe(200);
     adminHeaders = changed.headers;
 
@@ -146,6 +147,17 @@ describe("MVP authentication, administration, and collection authorization", () 
     secondaryAdminHeaders = (await signIn("other-admin@example.test", "Admin-password-1!")).headers;
   });
 
+  it("lets an administrator change only their own login email after password confirmation", async () => {
+    await expect(
+      changeOwnAdminEmail(adminHeaders, "owner@example.test", "wrong-password", auth, pool),
+    ).rejects.toBeInstanceOf(AdminError);
+    await changeOwnAdminEmail(adminHeaders, "owner@example.test", "A2!bc", auth, pool);
+    expect((await signIn(bootstrapAdminEmail, "A2!bc")).response.status).not.toBe(200);
+    const changedLogin = await signIn("owner@example.test", "A2!bc");
+    expect(changedLogin.response.status).toBe(200);
+    adminHeaders = changedLogin.headers;
+  });
+
   it("derives collection ownership from the session and blocks IDOR attempts", async () => {
     aliceCollectionId = (await addOwnCollection(aliceHeaders, albumId, auth, pool)).id;
     const bobCollectionId = (await addOwnCollection(bobHeaders, albumId, auth, pool)).id;
@@ -182,10 +194,10 @@ describe("MVP authentication, administration, and collection authorization", () 
   });
 
   it("resets passwords and suspends accounts while revoking active sessions", async () => {
-    await resetManagedUserPassword(adminHeaders, bobId, "Bob-password-reset!", auth, pool);
+    await resetManagedUserPassword(adminHeaders, bobId, "B2!bc", auth, pool);
     await expect(auth.api.getSession({ headers: bobHeaders })).resolves.toBeNull();
     expect((await signIn("bob@example.test", "Bob-password-1!")).response.status).not.toBe(200);
-    const resetLogin = await signIn("bob@example.test", "Bob-password-reset!");
+    const resetLogin = await signIn("bob@example.test", "B2!bc");
     expect(resetLogin.response.status).toBe(200);
     await expect(getCollectionsOverview(resetLogin.headers, auth, pool)).rejects.toMatchObject({ status: 403 });
 
