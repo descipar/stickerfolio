@@ -1,0 +1,41 @@
+name: stickerfolio
+
+x-app-environment: &app-environment
+  DATABASE_URL: ${DATABASE_URL:?Set DATABASE_URL in .env}
+  DATABASE_SSL_MODE: ${DATABASE_SSL_MODE:-require}
+  DATABASE_SSL_CA: ${DATABASE_SSL_CA:-}
+  DATABASE_POOL_MAX: ${DATABASE_POOL_MAX:-10}
+  DATABASE_IDLE_TIMEOUT_MS: ${DATABASE_IDLE_TIMEOUT_MS:-30000}
+  DATABASE_CONNECTION_TIMEOUT_MS: ${DATABASE_CONNECTION_TIMEOUT_MS:-5000}
+  APP_BASE_URL: ${APP_BASE_URL:-http://localhost:3500}
+  BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET:?Set BETTER_AUTH_SECRET in .env}
+  REGISTRATION_MODE: ${REGISTRATION_MODE:-closed}
+
+services:
+  migrate:
+    image: stickerfolio:${STICKERFOLIO_TAG:-local}
+    build:
+      context: .
+      target: runtime
+    command: ["node", "node_modules/tsx/dist/cli.mjs", "scripts/migrate.ts", "up"]
+    environment: *app-environment
+    restart: "no"
+
+  app:
+    image: stickerfolio:${STICKERFOLIO_TAG:-local}
+    build:
+      context: .
+      target: runtime
+    environment: *app-environment
+    ports:
+      - "${APP_PORT:-3500}:3500"
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://127.0.0.1:3500/api/health/ready"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 10s
+    restart: unless-stopped

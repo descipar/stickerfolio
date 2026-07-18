@@ -64,7 +64,68 @@ pnpm db:migrate
 
 For local migration development, `pnpm db:migrate:down` reverts exactly one migration. Production deployments should roll forward with a corrective migration instead of rewriting migration history.
 
-## Production start
+## Docker deployment with bundled PostgreSQL
+
+Copy the example configuration, replace the authentication secret and PostgreSQL password, and set `APP_BASE_URL` to the URL used by browsers:
+
+```bash
+cp .env.example .env
+docker compose up -d --build
+```
+
+The application is published on host port `3500`; PostgreSQL is reachable only inside the Compose network. The one-shot `migrate` service must complete before the application starts. Database files live in the named `postgres_data` volume and survive container and image replacement.
+
+Inspect startup and health with:
+
+```bash
+docker compose ps
+docker compose logs migrate app
+curl --fail http://localhost:3500/api/health/ready
+```
+
+Change `APP_PORT` if port 3500 is unavailable. Keep `APP_BASE_URL` aligned with the URL used to reach the installation. Reserved URL characters in `POSTGRES_PASSWORD` must be percent-encoded because the password becomes part of `DATABASE_URL` inside Compose.
+
+## Docker deployment with external PostgreSQL
+
+The external variant uses the identical image and migration command but defines no PostgreSQL service or volume. Set `DATABASE_URL` and the appropriate TLS mode in `.env`, then run:
+
+```bash
+docker compose --file compose.external.yml up -d --build
+```
+
+Use `DATABASE_SSL_MODE=require` for encrypted connections without CA verification, or `verify-ca`/`verify-full` together with `DATABASE_SSL_CA` for verified TLS. Use `disable` only on a trusted private connection.
+
+## PostgreSQL backup and restore
+
+Backups must be stored outside containers and committed volumes. Create a directory owned by the operator, then use the bundled-database mode:
+
+```bash
+mkdir -p backups
+./scripts/postgres-backup.sh --compose backups/stickerfolio.dump
+```
+
+Restore only into an empty database. Stop the application first when restoring the active installation:
+
+```bash
+docker compose stop app
+docker compose exec postgres dropdb --force --username stickerfolio stickerfolio
+docker compose exec postgres createdb --username stickerfolio --owner stickerfolio stickerfolio
+./scripts/postgres-restore.sh --compose backups/stickerfolio.dump
+docker compose start app
+```
+
+The drop command permanently deletes the current database. Keep and verify the backup before running it.
+
+For an external database, install PostgreSQL 17 client tools on the operator machine and provide the URL through the environment rather than a script argument:
+
+```bash
+DATABASE_URL='postgresql://...' ./scripts/postgres-backup.sh --external backups/stickerfolio.dump
+DATABASE_URL='postgresql://...' ./scripts/postgres-restore.sh --external backups/stickerfolio.dump
+```
+
+The restore target must be empty in both modes. The CI deployment test creates a fresh secondary database, restores the dump there, and verifies its migration history.
+
+## Manual production start
 
 ```bash
 pnpm build

@@ -1,0 +1,63 @@
+name: stickerfolio
+
+x-app-environment: &app-environment
+  DATABASE_URL: postgresql://stickerfolio:${POSTGRES_PASSWORD:-stickerfolio}@postgres:5432/stickerfolio
+  DATABASE_SSL_MODE: disable
+  DATABASE_POOL_MAX: ${DATABASE_POOL_MAX:-10}
+  DATABASE_IDLE_TIMEOUT_MS: ${DATABASE_IDLE_TIMEOUT_MS:-30000}
+  DATABASE_CONNECTION_TIMEOUT_MS: ${DATABASE_CONNECTION_TIMEOUT_MS:-5000}
+  APP_BASE_URL: ${APP_BASE_URL:-http://localhost:3500}
+  BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET:?Set BETTER_AUTH_SECRET in .env}
+  REGISTRATION_MODE: ${REGISTRATION_MODE:-closed}
+
+services:
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_DB: stickerfolio
+      POSTGRES_USER: stickerfolio
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-stickerfolio}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U stickerfolio -d stickerfolio"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+    restart: unless-stopped
+
+  migrate:
+    image: stickerfolio:${STICKERFOLIO_TAG:-local}
+    build:
+      context: .
+      target: runtime
+    command: ["node", "node_modules/tsx/dist/cli.mjs", "scripts/migrate.ts", "up"]
+    environment: *app-environment
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: "no"
+
+  app:
+    image: stickerfolio:${STICKERFOLIO_TAG:-local}
+    build:
+      context: .
+      target: runtime
+    environment: *app-environment
+    ports:
+      - "${APP_PORT:-3500}:3500"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://127.0.0.1:3500/api/health/ready"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 10s
+    restart: unless-stopped
+
+volumes:
+  postgres_data:
