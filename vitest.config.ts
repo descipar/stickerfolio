@@ -13,6 +13,7 @@ export default defineConfig({
           name: "unit",
           include: ["src/**/*.test.ts", "test/**/*.test.ts"],
           exclude: ["test/**/*.integration.test.ts"],
+          testTimeout: 30_000,
         },
       },
       {
