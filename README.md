@@ -6,7 +6,7 @@ This branch contains the greenfield v2 implementation. The previous SQLite-based
 
 ## Current status
 
-The repository currently provides the Next.js application foundation, PostgreSQL persistence infrastructure, and versioned schema migrations. Album catalogs, collectors, authentication, holdings, and trade matching are introduced through the remaining [GitHub Issues](https://github.com/descipar/stickerfolio/issues).
+The repository contains the first usable MVP: PostgreSQL persistence, Better Auth sessions, administrator-managed user accounts, multiple personal albums, mobile sticker search and filters, and quantity tracking from zero through 99. Trade matching, self-registration, invitations, and catalog administration remain on the [GitHub roadmap](https://github.com/descipar/stickerfolio/issues).
 
 The agreed product and architecture decisions are documented in the [roadmap](docs/ROADMAP.md).
 The provider-neutral catalog interchange contract is documented in the [album template format](docs/ALBUM_TEMPLATE_FORMAT.md).
@@ -45,6 +45,13 @@ pnpm dev
 
 Open `http://localhost:3500`.
 
+On a completely empty database, the migration command creates exactly one restricted bootstrap account:
+
+- email: `admin@stickerfolio.local`
+- initial password: `admin123!`
+
+The bootstrap account must choose a new password before any administration feature is available. It has no collector profile, album, or holdings. After changing the password, use **Users** to create normal accounts with a display name and temporary password. Every newly created user must also change that password at first sign-in.
+
 ## Quality checks
 
 ```bash
@@ -68,7 +75,7 @@ For local migration development, `pnpm db:migrate:down` reverts exactly one migr
 
 ## Optional example seeds
 
-No album, account, collector, collection, or holding is created automatically. The verified World Cup 2026 catalog can be loaded explicitly and idempotently:
+No album, collector profile, collection, or holding is created automatically. Only the restricted bootstrap administrator described above is created on an empty installation. The verified World Cup 2026 catalog can be loaded explicitly and idempotently:
 
 ```bash
 pnpm seed:wm2026
