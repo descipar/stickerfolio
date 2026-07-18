@@ -4,6 +4,7 @@ import { betterAuth } from "better-auth";
 import { getEnvironment, type AppEnvironment } from "@/infrastructure/config";
 import { getPool } from "@/infrastructure/database";
 import { query } from "@/infrastructure/database";
+import { maximumPasswordLength, minimumPasswordLength } from "@/shared/password-policy";
 
 import { hashPassword, verifyPassword } from "./password";
 
@@ -18,8 +19,8 @@ export function createAuth(environment: AppEnvironment, pool: Pool) {
     emailAndPassword: {
       enabled: true,
       disableSignUp: true,
-      minPasswordLength: 10,
-      maxPasswordLength: 128,
+      minPasswordLength: minimumPasswordLength,
+      maxPasswordLength: maximumPasswordLength,
       password: { hash: hashPassword, verify: verifyPassword },
       revokeSessionsOnPasswordReset: true,
     },

@@ -96,6 +96,7 @@ h3 { margin-bottom: 0.45rem; font-size: 1.08rem; }
 
 .form-stack { display: grid; gap: 1rem; margin-top: 1.4rem; }
 .form-stack label { display: grid; gap: 0.45rem; color: var(--muted); font-size: 0.88rem; font-weight: 700; }
+.field-hint { color: var(--muted); font-size: 0.8rem; font-weight: 500; }
 input, select {
   width: 100%;
   min-height: 48px;
@@ -207,6 +208,9 @@ summary { min-height: 44px; display: flex; align-items: center; cursor: pointer;
 .password-reset { flex: 1 1 100%; }
 .password-reset summary { width: fit-content; }
 .password-reset form { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 0.5rem; }
+.password-reset form > label { display: grid; gap: 0.35rem; }
+.password-reset .account-email-form { grid-template-columns: 1fr; }
+.account-email-form label { display: grid; gap: 0.35rem; color: var(--muted); font-size: 0.85rem; font-weight: 700; }
 
 .visually-hidden { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
 

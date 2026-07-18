@@ -9,7 +9,6 @@ export default async function AlbumsPage() {
   const identity = await resolveIdentity(await headers());
   if (!identity) redirect("/login");
   if (identity.mustChangePassword) redirect("/password/change");
-  if (!identity.collector && identity.role === "admin") redirect("/admin/users");
 
   return (
     <main className="page-shell">
@@ -20,9 +19,18 @@ export default async function AlbumsPage() {
         </div>
         <AppNavigation isAdmin={identity.role === "admin"} />
       </header>
-      {identity.collector ? <AlbumsOverview /> : (
-        <section className="card empty-state"><h2>Collector profile required</h2><p className="muted">Ask an administrator to add a collector profile to this account.</p></section>
-      )}
+      {identity.collector
+        ? <AlbumsOverview />
+        : identity.role === "admin"
+          ? (
+              <section className="card empty-state">
+                <h2>Album management is not available yet</h2>
+                <p className="muted">
+                  This administrator account has no personal collection. Creating album templates will be added with the catalog administration feature.
+                </p>
+              </section>
+            )
+          : <section className="card empty-state"><h2>Collector profile required</h2><p className="muted">Ask an administrator to add a collector profile to this account.</p></section>}
     </main>
   );
 }

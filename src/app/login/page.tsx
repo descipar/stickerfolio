@@ -12,7 +12,7 @@ export default async function LoginPage() {
     <main className="page-shell auth-page">
       <section className="card" aria-labelledby="login-title">
         <p className="eyebrow">Stickerfolio</p>
-        <h1 id="login-title" className="page-title">Welcome back</h1>
+        <h1 id="login-title" className="page-title">Welcome to Stickerfolio</h1>
         <p className="muted">Sign in to manage your sticker albums.</p>
         <LoginForm />
       </section>

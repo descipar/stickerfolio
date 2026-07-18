@@ -2,10 +2,11 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 
 import { AuthenticationError, changeOwnPassword } from "@/modules/identity";
+import { maximumPasswordLength, minimumPasswordLength } from "@/shared/password-policy";
 
 const bodySchema = z.object({
   currentPassword: z.string().min(1).max(128),
-  newPassword: z.string().min(10).max(128),
+  newPassword: z.string().min(minimumPasswordLength).max(maximumPasswordLength),
 });
 
 export async function POST(request: Request): Promise<NextResponse> {

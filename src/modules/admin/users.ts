@@ -4,10 +4,12 @@ import { getPool, query, withTransaction } from "@/infrastructure/database";
 import {
   hashPassword,
   requireIdentity,
+  verifyPassword,
   type IdentityContext,
   type StickerfolioAuth,
   type UserRole,
 } from "@/modules/identity";
+import { maximumPasswordLength, minimumPasswordLength } from "@/shared/password-policy";
 
 export class AdminError extends Error {
   constructor(
@@ -80,6 +82,35 @@ export async function listManagedUsers(
   }));
 }
 
+export async function changeOwnAdminEmail(
+  headers: Headers,
+  email: string,
+  currentPassword: string,
+  auth?: StickerfolioAuth,
+  pool: Pool = getPool(),
+): Promise<void> {
+  const actor = await requireAdmin(headers, auth, pool);
+  const account = await query<{ password: string | null }>(
+    `SELECT password FROM account
+      WHERE "userId" = $1 AND "providerId" = 'credential'`,
+    [actor.userId],
+    pool,
+  );
+  const passwordHash = account.rows[0]?.password;
+  if (!passwordHash || !await verifyPassword({ hash: passwordHash, password: currentPassword })) {
+    throw new AdminError("The current password is incorrect.");
+  }
+  try {
+    await query(
+      `UPDATE "user" SET email = $1, "updatedAt" = now() WHERE id = $2`,
+      [email.toLowerCase(), actor.userId],
+      pool,
+    );
+  } catch {
+    throw new AdminError("The email address is already in use.", 409);
+  }
+}
+
 interface CreateManagedUserInput {
   email: string;
   displayName: string;
@@ -122,6 +153,9 @@ export async function createManagedUser(
   pool: Pool = getPool(),
 ): Promise<{ id: string }> {
   await requireAdmin(headers, auth, pool);
+  if (input.initialPassword.length < minimumPasswordLength || input.initialPassword.length > maximumPasswordLength) {
+    throw new AdminError(`Passwords must contain ${minimumPasswordLength} through ${maximumPasswordLength} characters.`);
+  }
   const passwordHash = await hashPassword(input.initialPassword);
   try {
     const id = await withTransaction((client) => insertManagedUser(client, input, passwordHash), pool);
@@ -140,6 +174,9 @@ export async function resetManagedUserPassword(
 ): Promise<void> {
   const actor = await requireAdmin(headers, auth, pool);
   if (actor.userId === userId) throw new AdminError("Use the account password page for your own password.");
+  if (newPassword.length < minimumPasswordLength || newPassword.length > maximumPasswordLength) {
+    throw new AdminError(`Passwords must contain ${minimumPasswordLength} through ${maximumPasswordLength} characters.`);
+  }
   const passwordHash = await hashPassword(newPassword);
   await withTransaction(async (client) => {
     const result = await query(

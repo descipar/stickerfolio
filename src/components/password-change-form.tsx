@@ -2,6 +2,8 @@
 
 import { useState, type FormEvent } from "react";
 
+import { maximumPasswordLength, minimumPasswordLength } from "@/shared/password-policy";
+
 export function PasswordChangeForm() {
   const [message, setMessage] = useState("");
   const [pending, setPending] = useState(false);
@@ -41,11 +43,27 @@ export function PasswordChangeForm() {
       </label>
       <label>
         New password
-        <input name="newPassword" type="password" autoComplete="new-password" minLength={10} maxLength={128} required />
+        <span className="field-hint" id="new-password-hint">At least {minimumPasswordLength} characters</span>
+        <input
+          name="newPassword"
+          type="password"
+          autoComplete="new-password"
+          minLength={minimumPasswordLength}
+          maxLength={maximumPasswordLength}
+          aria-describedby="new-password-hint"
+          required
+        />
       </label>
       <label>
         Confirm new password
-        <input name="confirmation" type="password" autoComplete="new-password" minLength={10} maxLength={128} required />
+        <input
+          name="confirmation"
+          type="password"
+          autoComplete="new-password"
+          minLength={minimumPasswordLength}
+          maxLength={maximumPasswordLength}
+          required
+        />
       </label>
       {message ? <p className="form-error" role="alert">{message}</p> : null}
       <button className="primary-button" type="submit" disabled={pending}>

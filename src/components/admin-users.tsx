@@ -2,6 +2,8 @@
 
 import { useCallback, useEffect, useState, type FormEvent } from "react";
 
+import { maximumPasswordLength, minimumPasswordLength } from "@/shared/password-policy";
+
 interface ManagedUser {
   id: string;
   email: string;
@@ -85,6 +87,32 @@ export function AdminUsers({ currentUserId }: { currentUserId: string }) {
     setPending(false);
   }
 
+  async function changeOwnEmail(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setPending(true);
+    setError("");
+    setMessage("");
+    const form = event.currentTarget;
+    const data = new FormData(form);
+    const response = await fetch("/api/account/email", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        email: String(data.get("email") ?? ""),
+        currentPassword: String(data.get("currentPassword") ?? ""),
+      }),
+    });
+    if (!response.ok) {
+      const body = await response.json().catch(() => null) as { error?: string } | null;
+      setError(body?.error ?? "The email address could not be changed.");
+    } else {
+      form.reset();
+      setMessage("Login email updated.");
+      await load();
+    }
+    setPending(false);
+  }
+
   return (
     <div className="content-stack">
       {message ? <p className="state-message success" role="status">{message}</p> : null}
@@ -96,7 +124,19 @@ export function AdminUsers({ currentUserId }: { currentUserId: string }) {
         <form className="form-stack" onSubmit={createUser}>
           <label>Display name<input name="displayName" required maxLength={100} autoComplete="off" /></label>
           <label>Email<input name="email" type="email" required maxLength={254} autoComplete="off" /></label>
-          <label>Initial password<input name="initialPassword" type="password" required minLength={10} maxLength={128} autoComplete="new-password" /></label>
+          <label>
+            Initial password
+            <span className="field-hint" id="initial-password-hint">At least {minimumPasswordLength} characters</span>
+            <input
+              name="initialPassword"
+              type="password"
+              required
+              minLength={minimumPasswordLength}
+              maxLength={maximumPasswordLength}
+              aria-describedby="initial-password-hint"
+              autoComplete="new-password"
+            />
+          </label>
           <label>Role<select name="role" defaultValue="user"><option value="user">User</option><option value="admin">Administrator</option></select></label>
           <button className="primary-button" disabled={pending} type="submit">{pending ? "Saving…" : "Create user"}</button>
         </form>
@@ -134,12 +174,39 @@ export function AdminUsers({ currentUserId }: { currentUserId: string }) {
                       }}>
                         <label>
                           <span className="visually-hidden">New temporary password for {user.email}</span>
-                          <input name="password" type="password" minLength={10} maxLength={128} required autoComplete="new-password" placeholder="Temporary password" />
+                          <span className="field-hint" id={`reset-password-hint-${user.id}`}>
+                            At least {minimumPasswordLength} characters
+                          </span>
+                          <input
+                            name="password"
+                            type="password"
+                            minLength={minimumPasswordLength}
+                            maxLength={maximumPasswordLength}
+                            aria-describedby={`reset-password-hint-${user.id}`}
+                            required
+                            autoComplete="new-password"
+                            placeholder="Temporary password"
+                          />
                         </label>
                         <button className="primary-button" type="submit" disabled={pending}>Set password</button>
                       </form>
                     </details>
-                  ) : null}
+                  ) : (
+                    <details className="password-reset">
+                      <summary>Change login email</summary>
+                      <form className="account-email-form" key={user.email} onSubmit={changeOwnEmail}>
+                        <label>
+                          <span>Email</span>
+                          <input name="email" type="email" defaultValue={user.email} maxLength={254} required autoComplete="email" />
+                        </label>
+                        <label>
+                          <span>Current password</span>
+                          <input name="currentPassword" type="password" required autoComplete="current-password" />
+                        </label>
+                        <button className="primary-button" type="submit" disabled={pending}>Change email</button>
+                      </form>
+                    </details>
+                  )}
                 </div>
               </article>
             );
