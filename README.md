@@ -10,6 +10,7 @@ The repository currently provides the Next.js application foundation, PostgreSQL
 
 The agreed product and architecture decisions are documented in the [roadmap](docs/ROADMAP.md).
 The provider-neutral catalog interchange contract is documented in the [album template format](docs/ALBUM_TEMPLATE_FORMAT.md).
+Password hash parameters and the Raspberry Pi benchmark command are documented in [Password hashing](docs/PASSWORD_HASHING.md).
 
 ## Requirements
 
