@@ -15,7 +15,7 @@ Stickerfolio is a self-hosted, smartphone-optimized tracker for sticker albums. 
 - Extensible data model for multiple collectors.
 - Mobile web app for the iPhone home screen.
 
-A new installation starts without albums or sticker holdings. Sarah's prepared state for the “Panini World Cup 2026” album from July 16, 2026 can be loaded explicitly with the included seed script. Notes about potential trades are intentionally not imported as application state.
+A new installation starts without albums or sticker holdings.
 
 ## Roadmap
 
@@ -33,12 +33,6 @@ pnpm dev
 ```
 
 The application is then available at `http://localhost:3000`. The local database is created at `data/stickerfolio.db`. The first collector is created in the application on first use.
-
-After creating Sarah in the application, her prepared World Cup 2026 holdings can be loaded locally:
-
-```bash
-pnpm seed:sarah -- --collector sarah
-```
 
 ## Raspberry Pi 4
 
@@ -61,13 +55,7 @@ docker compose build --pull
 docker compose up -d
 ```
 
-The container starts without collector or album data. Open Stickerfolio in a browser, create Sarah in collector management, and pass the displayed identifier to the seed script:
-
-```bash
-docker compose exec app node seed/scripts/seed-sarah.js --collector sarah
-```
-
-The script does not create a collector. It loads Sarah's World Cup 2026 holdings only for the specified existing collector. It is safe to run again; existing holdings are not overwritten.
+The container starts without collector or album data. Create collectors and import albums through the application.
 
 Alternatively, clone over HTTPS with a [fine-grained personal access token](https://github.com/settings/personal-access-tokens/new). The token needs only **Contents: Read-only** access to `descipar/stickerfolio`. Use `descipar` as the username and enter the token, not the GitHub password, when prompted for a password:
 
@@ -100,7 +88,7 @@ The following command removes the container, locally built image, and all collec
 ./scripts/reset.sh
 ```
 
-Create the first collector in the application again. Run the seed only when Sarah's prepared holdings should be loaded explicitly.
+Create the first collector in the application again.
 
 ### Managing collectors
 
@@ -110,7 +98,7 @@ Collectors are managed exclusively through the application. Open collector manag
 
 The SQLite database is stored persistently in `data/` next to the Compose file. It is not included in the Docker image and survives updates.
 
-Existing installations retain previously loaded Sarah data. Only a newly created database starts without album data.
+Existing installations retain their stored collector and album data. Only a newly created database starts without album data.
 
 Create a consistent backup with:
 

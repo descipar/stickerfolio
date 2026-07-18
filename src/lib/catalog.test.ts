@@ -14,7 +14,7 @@ describe("Katalog-Helfer", () => {
     expect(wm2026Catalog.some((sticker) => sticker.code === "CC14")).toBe(true);
   });
 
-  it("übernimmt Sarahs Startbestand", () => {
+  it("übernimmt den Beispiel-Startbestand", () => {
     expect(wm2026MissingCodes.size).toBe(344);
     expect(wm2026DuplicateCodes.size).toBe(124);
     expect(initialWm2026Quantity("GER12")).toBe(0);

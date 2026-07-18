@@ -71,7 +71,7 @@ export function CollectorManager({ collectors, activeId }: { collectors: Collect
 
       <form className="form-card" onSubmit={create}>
         <div><p className="eyebrow">Neu</p><h2>Sammler anlegen</h2></div>
-        <label><span>Name</span><input required minLength={2} maxLength={60} value={name} onChange={(event) => setName(event.target.value)} placeholder="z. B. Sarah" autoComplete="name" /></label>
+        <label><span>Name</span><input required minLength={2} maxLength={60} value={name} onChange={(event) => setName(event.target.value)} placeholder="z. B. Sammler 1" autoComplete="name" /></label>
         {error && <p className="form-error">{error}</p>}
         <button className="button button-primary button-large" disabled={pending || name.trim().length < 2}>{pending ? "Wird gespeichert …" : "Sammler anlegen"}</button>
       </form>
