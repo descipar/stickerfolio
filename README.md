@@ -65,6 +65,28 @@ pnpm db:migrate
 
 For local migration development, `pnpm db:migrate:down` reverts exactly one migration. Production deployments should roll forward with a corrective migration instead of rewriting migration history.
 
+## Optional example seeds
+
+No album, account, collector, collection, or holding is created automatically. The verified World Cup 2026 catalog can be loaded explicitly and idempotently:
+
+```bash
+pnpm seed:wm2026
+```
+
+In a Compose deployment, run the same seed from the built image:
+
+```bash
+docker compose run --rm app node node_modules/tsx/dist/cli.mjs scripts/seed-wm2026.ts
+```
+
+The repository also contains a separate example holdings dataset. It never creates a user or collector profile and requires the UUID of one unambiguous, existing profile plus an explicit dataset name:
+
+```bash
+pnpm seed:example-holdings -- --collector <profile-uuid> --dataset wm2026-example
+```
+
+Existing holding rows are not overwritten. An unknown profile, missing catalog revision, or collection on a different revision aborts the transaction without changes. Both seed commands use `DATABASE_URL`, so bundled and external PostgreSQL follow the same data path.
+
 ## Docker deployment with bundled PostgreSQL
 
 Copy the example configuration, replace the authentication secret and PostgreSQL password, and set `APP_BASE_URL` to the URL used by browsers:
