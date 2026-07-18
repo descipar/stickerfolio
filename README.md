@@ -1,8 +1,6 @@
 # Stickerfolio
 
-Stickerfolio is being rebuilt as a portable, mobile-first sticker album tracker for multiple authenticated collectors.
-
-This branch contains the greenfield v2 implementation. The previous SQLite-based application remains available through the [`v1.0.0-legacy`](https://github.com/descipar/stickerfolio/tree/v1.0.0-legacy) tag.
+Stickerfolio is a portable, mobile-first sticker album tracker for multiple authenticated collectors.
 
 ## Current status
 
