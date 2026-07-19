@@ -2,6 +2,7 @@
   "name": "stickerfolio",
   "version": "2.0.0-alpha.0",
   "private": true,
+  "license": "PolyForm-Noncommercial-1.0.0",
   "description": "A portable, mobile-first sticker album tracker for multiple collectors.",
   "scripts": {
     "dev": "next dev --port 3500",
