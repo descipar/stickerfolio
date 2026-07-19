@@ -3,6 +3,7 @@ import type { Pool, PoolClient } from "pg";
 import { DatabaseError, getPool, query, withTransaction } from "@/infrastructure/database";
 import {
   hashPassword,
+  normalizeEmail,
   requireIdentity,
   verifyPassword,
   type IdentityContext,
@@ -103,10 +104,49 @@ export async function changeOwnAdminEmail(
   try {
     await query(
       `UPDATE "user" SET email = $1, "updatedAt" = now() WHERE id = $2`,
-      [email.toLowerCase(), actor.userId],
+      [normalizeEmail(email), actor.userId],
       pool,
     );
   } catch (error) {
+    if (error instanceof DatabaseError && error.code === "23505") {
+      throw new AdminError("The email address is already in use.", 409);
+    }
+    if (error instanceof DatabaseError) {
+      throw new AdminError("The service is temporarily unavailable.", 503);
+    }
+    throw error;
+  }
+}
+
+/**
+ * Administrator changes any user's login email. Normalizes with the shared
+ * identity normalization, relies on the unique constraint for an atomic
+ * check-and-set (23505 -> 409), and revokes the target user's sessions so they
+ * must sign in again with the new address (product decision). Email
+ * verification is intentionally disabled in the MVP (Roadmap 8.3), so the new
+ * address is effective immediately.
+ */
+export async function setManagedUserEmail(
+  headers: Headers,
+  userId: string,
+  email: string,
+  auth?: StickerfolioAuth,
+  pool: Pool = getPool(),
+): Promise<void> {
+  await requireAdmin(headers, auth, pool);
+  const normalized = normalizeEmail(email);
+  try {
+    await withTransaction(async (client) => {
+      const result = await query(
+        `UPDATE "user" SET email = $1, "updatedAt" = now() WHERE id = $2`,
+        [normalized, userId],
+        client,
+      );
+      if (result.rowCount !== 1) throw new AdminError("User not found.", 404);
+      await query(`DELETE FROM session WHERE "userId" = $1`, [userId], client);
+    }, pool);
+  } catch (error) {
+    if (error instanceof AdminError) throw error;
     if (error instanceof DatabaseError && error.code === "23505") {
       throw new AdminError("The email address is already in use.", 409);
     }
@@ -134,7 +174,7 @@ async function insertManagedUser(
        (name, email, "emailVerified", "mustChangePassword", role, status)
      VALUES ($1, $2, true, true, $3, 'active')
      RETURNING id`,
-    [input.displayName, input.email.toLowerCase(), input.role],
+    [input.displayName, normalizeEmail(input.email), input.role],
     client,
   );
   const userId = user.rows[0]!.id;
