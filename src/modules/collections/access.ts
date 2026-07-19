@@ -4,12 +4,15 @@ import { getPool } from "@/infrastructure/database";
 import { listPublishedAlbums, type PublishedAlbumSummary } from "@/modules/catalog";
 import { requireCollectorContext } from "@/modules/collectors";
 
+import { exportFileName, serializeCollectionExport } from "./csv";
 import {
   createCollection,
   listCollections,
+  loadCollectionExport,
   loadCollectionStickers,
   removeCollection,
   setHoldingQuantity,
+  type CollectionExportType,
   type CollectionSticker,
   type CollectionSummary,
 } from "./repository";
@@ -78,4 +81,22 @@ export async function setOwnHoldingQuantity(
 ): Promise<void> {
   const identity = await requireCollectorContext(headers, auth, pool);
   await setHoldingQuantity(identity.collector.id, collectionId, stickerId, quantity, pool);
+}
+
+/**
+ * Exports the authenticated collector's own missing or duplicates list as CSV.
+ * Ownership is derived from the session, never a client-supplied collector id,
+ * so foreign collections are never exportable (IDOR-safe). Never includes login
+ * email or authentication data.
+ */
+export async function exportOwnCollection(
+  headers: Headers,
+  collectionId: string,
+  type: CollectionExportType,
+  auth?: CollectorAuth,
+  pool: Pool = getPool(),
+): Promise<{ filename: string; content: string }> {
+  const identity = await requireCollectorContext(headers, auth, pool);
+  const data = await loadCollectionExport(identity.collector.id, collectionId, type, pool);
+  return { filename: exportFileName(data), content: serializeCollectionExport(data) };
 }

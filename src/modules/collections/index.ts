@@ -3,12 +3,17 @@ export {
   createCollection,
   createCollectorProfile,
   listCollections,
+  loadCollectionExport,
   loadCollectionStickers,
   removeCollection,
   setHoldingQuantity,
+  type CollectionExport,
+  type CollectionExportSticker,
+  type CollectionExportType,
   type CollectionSticker,
   type CollectionSummary,
 } from "./repository";
+export { exportFileName, serializeCollectionExport, toCsv } from "./csv";
 export {
   seedExampleHoldings,
   type ExampleHoldingsDataset,
@@ -16,6 +21,7 @@ export {
 } from "./seed-example-holdings";
 export {
   addOwnCollection,
+  exportOwnCollection,
   getCollectionsOverview,
   getOwnCollectionStickers,
   removeOwnCollection,
