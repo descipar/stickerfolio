@@ -6,6 +6,7 @@ export function AppNavigation({ isAdmin, displayName }: { isAdmin: boolean; disp
   return (
     <nav className="app-navigation" aria-label="Main navigation">
       <Link href="/albums">Albums</Link>
+      <Link href="/account">Account</Link>
       {isAdmin ? <Link href="/admin/albums">Album templates</Link> : null}
       {isAdmin ? <Link href="/admin/users">Users</Link> : null}
       {displayName ? <span className="user-pill">{displayName}</span> : null}
