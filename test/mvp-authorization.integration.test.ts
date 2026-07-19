@@ -5,12 +5,16 @@ import {
   AdminError,
   changeOwnAdminEmail,
   createManagedUser,
+  importAdminAlbumTemplate,
+  listAdminAlbums,
   listManagedUsers,
   resetManagedUserPassword,
+  setAdminRevisionStatus,
   setManagedUserRole,
   setManagedUserStatus,
+  updateAdminAlbumMetadata,
 } from "@/modules/admin";
-import { seedAlbumTemplate } from "@/modules/catalog";
+import { CatalogError, seedAlbumTemplate } from "@/modules/catalog";
 import {
   CollectionError,
   addOwnCollection,
@@ -147,6 +151,22 @@ describe("MVP authentication, administration, and collection authorization", () 
     secondaryAdminHeaders = (await signIn("other-admin@example.test", "Admin-password-1!")).headers;
   });
 
+  it("distinguishes duplicate accounts from other database failures", async () => {
+    await expect(createManagedUser(adminHeaders, {
+      email: "alice@example.test",
+      displayName: "Duplicate Alice",
+      initialPassword: "Alice-password-2!",
+      role: "user",
+    }, auth, pool)).rejects.toMatchObject({ status: 409, message: "The email address is already in use." });
+
+    await expect(createManagedUser(adminHeaders, {
+      email: "invalid-role@example.test",
+      displayName: "Invalid role",
+      initialPassword: "Invalid-role-1!",
+      role: "invalid" as "user",
+    }, auth, pool)).rejects.toMatchObject({ status: 503, message: "The service is temporarily unavailable." });
+  });
+
   it("lets an administrator change only their own login email after password confirmation", async () => {
     await expect(
       changeOwnAdminEmail(adminHeaders, "owner@example.test", "wrong-password", auth, pool),
@@ -191,6 +211,84 @@ describe("MVP authentication, administration, and collection authorization", () 
     });
     expect(JSON.stringify(users)).not.toContain("quantity");
     expect(JSON.stringify(users)).not.toContain(stickerOne);
+  });
+
+  it("imports and manages album templates without accessing personal holdings", async () => {
+    const importedAlbumId = "dc6634ca-0713-59ca-920d-7ee62c35a43d";
+    const importedRevisionId = "4cd19613-1552-5247-a567-4bfe59f8f2e1";
+    const importedSectionId = "eadb1e5f-8f60-521d-b3bb-4cffdfa175a7";
+    const importedStickerId = "d0962d63-a781-5f51-8b02-2518a5832c65";
+    const importedTemplate = {
+      formatVersion: 1,
+      album: { id: importedAlbumId, slug: "admin-import", title: "Imported album", description: "Portable" },
+      revision: { id: importedRevisionId, number: 1, label: "Imported", status: "published" },
+      sections: [{ id: importedSectionId, code: "A", name: "Section A", sortOrder: 0 }],
+      stickers: [{
+        stableId: importedStickerId,
+        stableKey: "A1",
+        sectionId: importedSectionId,
+        code: "A1",
+        label: "Sticker A1",
+        sortOrder: 0,
+      }],
+    } as const;
+
+    await expect(importAdminAlbumTemplate(aliceHeaders, importedTemplate, auth, pool)).rejects.toBeInstanceOf(AdminError);
+    await expect(importAdminAlbumTemplate(adminHeaders, importedTemplate, auth, pool)).resolves.toMatchObject({
+      created: true,
+      albumId: importedAlbumId,
+      revisionId: importedRevisionId,
+    });
+    expect(await listAdminAlbums(adminHeaders, auth, pool)).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        id: importedAlbumId,
+        revisions: [expect.objectContaining({ status: "draft", sectionCount: 1, stickerCount: 1 })],
+      }),
+    ]));
+    await expect(importAdminAlbumTemplate(adminHeaders, importedTemplate, auth, pool)).rejects.toMatchObject({ status: 409 });
+
+    await setAdminRevisionStatus(adminHeaders, importedRevisionId, "publish", auth, pool);
+    await updateAdminAlbumMetadata(
+      adminHeaders,
+      importedAlbumId,
+      importedRevisionId,
+      { title: "Corrected album title", description: "Corrected description" },
+      auth,
+      pool,
+    );
+    const catalogState = await listAdminAlbums(adminHeaders, auth, pool);
+    expect(catalogState.find((album) => album.id === importedAlbumId)).toMatchObject({
+      title: "Corrected album title",
+      revisions: [expect.objectContaining({ status: "published" })],
+    });
+    const corrections = await query<{ count: number }>(
+      "SELECT count(*)::integer AS count FROM album_metadata_corrections WHERE revision_id = $1",
+      [importedRevisionId],
+      pool,
+    );
+    expect(corrections.rows[0]?.count).toBe(2);
+    const personalData = await query<{ collections: number; holdings: number }>(
+      `SELECT
+         (SELECT count(*)::integer FROM collections WHERE album_id = $1) AS collections,
+         (SELECT count(*)::integer FROM holdings WHERE album_id = $1) AS holdings`,
+      [importedAlbumId],
+      pool,
+    );
+    expect(personalData.rows[0]).toEqual({ collections: 0, holdings: 0 });
+
+    const invalidAlbumId = "6bfc2e92-f40b-5eb8-905f-ece0fa10b526";
+    await expect(importAdminAlbumTemplate(adminHeaders, {
+      ...importedTemplate,
+      album: { ...importedTemplate.album, id: invalidAlbumId, slug: "invalid-import" },
+      revision: { ...importedTemplate.revision, id: "64ac798c-5984-51a6-afdf-2c63f810d07d" },
+      stickers: [importedTemplate.stickers[0], { ...importedTemplate.stickers[0], stableId: crypto.randomUUID() }],
+    }, auth, pool)).rejects.toBeInstanceOf(CatalogError);
+    const partial = await query<{ count: number }>(
+      "SELECT count(*)::integer AS count FROM albums WHERE id = $1",
+      [invalidAlbumId],
+      pool,
+    );
+    expect(partial.rows[0]?.count).toBe(0);
   });
 
   it("resets passwords and suspends accounts while revoking active sessions", async () => {

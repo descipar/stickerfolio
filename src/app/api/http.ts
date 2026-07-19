@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 
 import { AdminError } from "@/modules/admin";
+import { CatalogError } from "@/modules/catalog";
 import { CollectionError } from "@/modules/collections";
 import { AuthenticationError } from "@/modules/identity";
 
@@ -18,11 +19,13 @@ export function apiError(error: unknown): NextResponse {
     );
   }
   if (error instanceof CollectionError) {
-    const notFound = error.message === "Collection not found.";
     return NextResponse.json(
-      { error: notFound ? "Collection not found." : "The collection could not be updated." },
-      { status: notFound ? 404 : 400 },
+      { error: error.status === 404 ? "Collection not found." : "The collection could not be updated." },
+      { status: error.status },
     );
   }
-  return NextResponse.json({ error: "The request could not be completed." }, { status: 400 });
+  if (error instanceof CatalogError) {
+    return NextResponse.json({ error: error.message }, { status: error.status });
+  }
+  return NextResponse.json({ error: "The request could not be completed." }, { status: 500 });
 }

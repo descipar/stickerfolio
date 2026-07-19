@@ -3,7 +3,10 @@ import type { Pool, PoolClient } from "pg";
 import { getPool, query, withTransaction, type QueryExecutor } from "@/infrastructure/database";
 
 export class CollectionError extends Error {
-  constructor(message: string) {
+  constructor(
+    message: string,
+    readonly status: 400 | 404 = 400,
+  ) {
     super(message);
     this.name = "CollectionError";
   }
@@ -144,7 +147,7 @@ export async function loadCollectionStickers(
     [collectionId, collectorId],
     executor,
   );
-  if (result.rows.length === 0) throw new CollectionError("Collection not found.");
+  if (result.rows.length === 0) throw new CollectionError("Collection not found.", 404);
   return result.rows.map((row) => ({
     id: row.id,
     code: row.code,
@@ -171,7 +174,7 @@ async function updateQuantity(
     client,
   );
   const current = collection.rows[0];
-  if (!current) throw new CollectionError("Collection not found.");
+  if (!current) throw new CollectionError("Collection not found.", 404);
 
   const membership = await query(
     `SELECT 1 FROM album_revision_stickers

@@ -1,6 +1,6 @@
 import type { Pool, PoolClient } from "pg";
 
-import { getPool, query, withTransaction } from "@/infrastructure/database";
+import { DatabaseError, getPool, query, withTransaction } from "@/infrastructure/database";
 import {
   hashPassword,
   requireIdentity,
@@ -14,7 +14,7 @@ import { maximumPasswordLength, minimumPasswordLength } from "@/shared/password-
 export class AdminError extends Error {
   constructor(
     message: string,
-    readonly status: 400 | 401 | 403 | 404 | 409 = 400,
+    readonly status: 400 | 401 | 403 | 404 | 409 | 503 = 400,
   ) {
     super(message);
     this.name = "AdminError";
@@ -34,7 +34,7 @@ export interface ManagedUser {
   createdAt: string;
 }
 
-async function requireAdmin(
+export async function requireAdmin(
   headers: Headers,
   auth: StickerfolioAuth | undefined,
   pool: Pool,
@@ -106,8 +106,14 @@ export async function changeOwnAdminEmail(
       [email.toLowerCase(), actor.userId],
       pool,
     );
-  } catch {
-    throw new AdminError("The email address is already in use.", 409);
+  } catch (error) {
+    if (error instanceof DatabaseError && error.code === "23505") {
+      throw new AdminError("The email address is already in use.", 409);
+    }
+    if (error instanceof DatabaseError) {
+      throw new AdminError("The service is temporarily unavailable.", 503);
+    }
+    throw error;
   }
 }
 
@@ -160,8 +166,14 @@ export async function createManagedUser(
   try {
     const id = await withTransaction((client) => insertManagedUser(client, input, passwordHash), pool);
     return { id };
-  } catch {
-    throw new AdminError("The account could not be created.", 409);
+  } catch (error) {
+    if (error instanceof DatabaseError && error.code === "23505") {
+      throw new AdminError("The email address is already in use.", 409);
+    }
+    if (error instanceof DatabaseError) {
+      throw new AdminError("The service is temporarily unavailable.", 503);
+    }
+    throw error;
   }
 }
 

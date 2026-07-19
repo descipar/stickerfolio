@@ -1,6 +1,7 @@
 import { Pool, type PoolConfig } from "pg";
 
 import { getEnvironment, type AppEnvironment } from "@/infrastructure/config";
+import { writeLog } from "@/infrastructure/observability/logger";
 
 type DatabaseConfiguration = AppEnvironment["database"];
 
@@ -30,7 +31,11 @@ export function createPgClientConfig(database: DatabaseConfiguration): PoolConfi
 }
 
 export function createPool(environment: AppEnvironment = getEnvironment()): Pool {
-  return new Pool(createPgClientConfig(environment.database));
+  const pool = new Pool(createPgClientConfig(environment.database));
+  pool.on("error", (error) => {
+    writeLog("error", "database.pool.idle-client-error", { error });
+  });
+  return pool;
 }
 
 export function getPool(environment: AppEnvironment = getEnvironment()): Pool {
