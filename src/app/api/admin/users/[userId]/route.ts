@@ -3,6 +3,7 @@ import { z } from "zod";
 
 import {
   resetManagedUserPassword,
+  setManagedUserEmail,
   setManagedUserRole,
   setManagedUserStatus,
 } from "@/modules/admin";
@@ -14,6 +15,7 @@ const idSchema = z.uuid();
 const mutationSchema = z.discriminatedUnion("action", [
   z.object({ action: z.literal("status"), status: z.enum(["active", "suspended"]) }),
   z.object({ action: z.literal("role"), role: z.enum(["user", "admin"]) }),
+  z.object({ action: z.literal("email"), email: z.email().max(254) }),
   z.object({
     action: z.literal("reset-password"),
     password: z.string().min(minimumPasswordLength).max(maximumPasswordLength),
@@ -34,6 +36,8 @@ export async function PATCH(
       await setManagedUserStatus(request.headers, userId.data, mutation.data.status);
     } else if (mutation.data.action === "role") {
       await setManagedUserRole(request.headers, userId.data, mutation.data.role);
+    } else if (mutation.data.action === "email") {
+      await setManagedUserEmail(request.headers, userId.data, mutation.data.email);
     } else {
       await resetManagedUserPassword(request.headers, userId.data, mutation.data.password);
     }
