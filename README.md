@@ -1,6 +1,21 @@
 # Stickerfolio
 
-Stickerfolio is a portable, mobile-first sticker album tracker for multiple authenticated collectors.
+Stickerfolio is a portable, mobile-first web application for managing sticker albums together without mixing up personal collections. Each collector gets an independent account, can collect multiple albums, and records the exact number of copies owned for every sticker. A quantity of zero means the sticker is missing, one means it is part of the collection, and every additional copy is available as a duplicate.
+
+The application is designed for the moment when a physical sticker collection becomes too large for handwritten lists. On a phone, collectors can quickly search by sticker code or team, filter an album by section and collection status, check off newly acquired stickers, and increase or decrease duplicate quantities. Progress, missing stickers, and spare copies remain visible per album while the shared catalog keeps sticker identities consistent between collectors and across album revisions.
+
+Stickerfolio currently provides:
+
+- authenticated, strictly separated collector accounts;
+- multiple personal albums per collector;
+- mobile-friendly sticker, team, search, and status views;
+- quantities from zero through 99, including explicit duplicate counts;
+- administrator-managed users and portable album templates;
+- PostgreSQL persistence with self-hosted Docker deployment by default.
+
+Trading is a central product goal. The shared album catalog and exact duplicate quantities provide the foundation for automatically finding collectors who can help each other: one collector is missing a sticker that another owns more than once, and a two-way match exists when both collectors can offer something the other still needs. The planned first trading view is intentionally read-only and privacy-preserving. Participation will be opt-in, matching will expose only display names and relevant sticker codes, and it will not change holdings, reserve stickers, or claim that a trade has happened. Trade requests and in-app messages can be added later on top of that verified matching model.
+
+The current MVP already handles the collection data needed for this workflow. Automatic trade-partner matching itself is still under development and is tracked in the [GitHub issues](https://github.com/descipar/stickerfolio/issues).
 
 ## Quick start on Raspberry Pi
 
