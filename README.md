@@ -227,6 +227,6 @@ Modules expose their public APIs through their root `index.ts` files. Imports be
 
 Stickerfolio is licensed under the [PolyForm Noncommercial License 1.0.0](LICENSE).
 
-You may use, modify, and distribute this software for **noncommercial purposes** only — including personal, hobby, educational, research, and use by nonprofit or government organizations. **Commercial use is not permitted** under this license. Any copy or derivative must retain the required attribution notice: `Copyright 2026 Kai Schulte`.
+You may use, modify, and distribute this software for **noncommercial purposes** only — including personal, hobby, educational, research, and use by nonprofit or government organizations. **Commercial use is not permitted** under this license. Any copy or derivative must retain the complete required attribution notice: `Required Notice: Copyright 2026 Kai Schulte (https://github.com/descipar)`.
 
 This is a source-available license, not an OSI-approved open-source license. For commercial licensing, contact the author.
