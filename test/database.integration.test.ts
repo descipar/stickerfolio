@@ -57,6 +57,14 @@ describe("PostgreSQL persistence", () => {
     expect(result.rows).toEqual([{ value: "safe parameter" }]);
   });
 
+  it("continues serving queries after an idle-client error event", async () => {
+    const pool = getPool(environment);
+    pool.emit("error", new Error("simulated idle client failure"), {} as never);
+
+    const result = await query<{ value: number }>("SELECT 1::integer AS value", [], pool);
+    expect(result.rows).toEqual([{ value: 1 }]);
+  });
+
   it("reports readiness and the applied schema version", async () => {
     const status = await getReadinessStatus(getPool(environment));
 

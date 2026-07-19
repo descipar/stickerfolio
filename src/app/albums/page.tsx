@@ -22,10 +22,11 @@ export default async function AlbumsPage() {
         : identity.role === "admin"
           ? (
               <section className="card empty-state">
-                <h2>Album management is not available yet</h2>
+                <h2>Manage the shared album catalog</h2>
                 <p className="muted">
-                  This administrator account has no personal collection. Creating album templates will be added with the catalog administration feature.
+                  This administrator account has no personal collection. Create, import, publish, and archive album templates in the administration area.
                 </p>
+                <Link className="primary-button inline-action" href="/admin/albums">Open album management</Link>
               </section>
             )
           : <section className="card empty-state"><h2>Collector profile required</h2><p className="muted">Ask an administrator to add a collector profile to this account.</p></section>}

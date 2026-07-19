@@ -43,3 +43,5 @@ All IDs are UUIDs. `album.id` identifies the logical album across installations.
 Section codes and order values must be unique within the revision. Sticker stable IDs, stable keys, codes, and order values must also be unique. Every sticker must reference a section in the same document. The runtime validator reports the exact invalid path and rejects the entire document before database work begins.
 
 Templates contain no login email, password, collector profile, personal collection, or holding quantity. Personal example data belongs in a separate, explicit holdings seed.
+
+Administrative uploads are limited to 2 MB and are always imported as draft revisions. The administrator reviews the resulting section and sticker counts before publishing. Publishing a new draft archives the previously published revision atomically; collections already using an older revision are never switched automatically.

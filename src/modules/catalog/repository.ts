@@ -1,11 +1,15 @@
 import type { Pool, PoolClient } from "pg";
+import { ZodError } from "zod";
 
 import { getPool, query, withTransaction, type QueryExecutor } from "@/infrastructure/database";
 
 import { parseAlbumTemplate, type AlbumTemplate } from "./seed-format";
 
 export class CatalogError extends Error {
-  constructor(message: string) {
+  constructor(
+    message: string,
+    readonly status: 400 | 404 | 409 = 400,
+  ) {
     super(message);
     this.name = "CatalogError";
   }
@@ -29,7 +33,30 @@ export interface PublishedAlbumSummary {
   stickerCount: number;
 }
 
-async function insertTemplate(client: PoolClient, template: AlbumTemplate): Promise<SeedResult> {
+export interface ManagedAlbumRevision {
+  id: string;
+  number: number;
+  label: string;
+  status: "draft" | "published" | "archived";
+  sectionCount: number;
+  stickerCount: number;
+  publishedAt: string | null;
+  archivedAt: string | null;
+}
+
+export interface ManagedAlbumSummary {
+  id: string;
+  slug: string;
+  title: string;
+  description: string | null;
+  revisions: ManagedAlbumRevision[];
+}
+
+async function insertTemplate(
+  client: PoolClient,
+  template: AlbumTemplate,
+  options: { allowExisting: boolean },
+): Promise<SeedResult> {
   const existing = await query<{ album_id: string; revision_number: number; status: string }>(
     `SELECT album_id, revision_number, status FROM album_revisions WHERE id = $1`,
     [template.revision.id],
@@ -39,6 +66,9 @@ async function insertTemplate(client: PoolClient, template: AlbumTemplate): Prom
     const revision = existing.rows[0];
     if (revision.album_id !== template.album.id || revision.revision_number !== template.revision.number) {
       throw new CatalogError("The template revision ID is already used by a different catalog revision.");
+    }
+    if (!options.allowExisting) {
+      throw new CatalogError("The template revision has already been imported.", 409);
     }
     return {
       created: false,
@@ -124,7 +154,25 @@ async function insertTemplate(client: PoolClient, template: AlbumTemplate): Prom
 
 export async function seedAlbumTemplate(input: unknown, pool: Pool = getPool()): Promise<SeedResult> {
   const template = parseAlbumTemplate(input);
-  return withTransaction((client) => insertTemplate(client, template), pool);
+  return withTransaction((client) => insertTemplate(client, template, { allowExisting: true }), pool);
+}
+
+export async function importAlbumTemplate(input: unknown, pool: Pool = getPool()): Promise<SeedResult> {
+  let template: AlbumTemplate;
+  try {
+    const parsed = parseAlbumTemplate(input);
+    template = { ...parsed, revision: { ...parsed.revision, status: "draft" } };
+  } catch (error) {
+    if (error instanceof ZodError) {
+      const details = error.issues
+        .slice(0, 3)
+        .map((issue) => `${issue.path.join(".") || "template"}: ${issue.message}`)
+        .join("; ");
+      throw new CatalogError(`Invalid album template. ${details}`);
+    }
+    throw error;
+  }
+  return withTransaction((client) => insertTemplate(client, template, { allowExisting: false }), pool);
 }
 
 export async function publishRevision(revisionId: string, executor?: QueryExecutor): Promise<void> {
@@ -143,6 +191,117 @@ export async function archiveRevision(revisionId: string, executor?: QueryExecut
     executor,
   );
   if (result.rowCount !== 1) throw new CatalogError("Published revision not found or cannot be archived.");
+}
+
+export async function publishRevisionAndArchiveCurrent(revisionId: string, pool: Pool = getPool()): Promise<void> {
+  await withTransaction(async (client) => {
+    const target = await query<{ album_id: string; status: string }>(
+      "SELECT album_id, status FROM album_revisions WHERE id = $1 FOR UPDATE",
+      [revisionId],
+      client,
+    );
+    if (!target.rows[0] || target.rows[0].status !== "draft") {
+      throw new CatalogError("Draft revision not found or cannot be published.", 404);
+    }
+    await query(
+      "UPDATE album_revisions SET status = 'archived' WHERE album_id = $1 AND status = 'published'",
+      [target.rows[0].album_id],
+      client,
+    );
+    await publishRevision(revisionId, client);
+  }, pool);
+}
+
+export async function listManagedAlbums(executor?: QueryExecutor): Promise<ManagedAlbumSummary[]> {
+  const result = await query<{
+    album_id: string;
+    slug: string;
+    title: string;
+    description: string | null;
+    revision_id: string;
+    revision_number: number;
+    revision_label: string;
+    status: ManagedAlbumRevision["status"];
+    section_count: number;
+    sticker_count: number;
+    published_at: Date | null;
+    archived_at: Date | null;
+  }>(
+    `SELECT a.id AS album_id, a.slug, a.title, a.description,
+            r.id AS revision_id, r.revision_number, r.label AS revision_label, r.status,
+            count(DISTINCT s.id)::integer AS section_count,
+            count(DISTINCT rs.sticker_id)::integer AS sticker_count,
+            r.published_at, r.archived_at
+       FROM albums a
+       JOIN album_revisions r ON r.album_id = a.id
+       LEFT JOIN album_sections s ON s.revision_id = r.id
+       LEFT JOIN album_revision_stickers rs ON rs.revision_id = r.id
+      GROUP BY a.id, r.id
+      ORDER BY a.title, a.id, r.revision_number DESC`,
+    [],
+    executor,
+  );
+  const albums = new Map<string, ManagedAlbumSummary>();
+  for (const row of result.rows) {
+    const album = albums.get(row.album_id) ?? {
+      id: row.album_id,
+      slug: row.slug,
+      title: row.title,
+      description: row.description,
+      revisions: [],
+    };
+    album.revisions.push({
+      id: row.revision_id,
+      number: row.revision_number,
+      label: row.revision_label,
+      status: row.status,
+      sectionCount: row.section_count,
+      stickerCount: row.sticker_count,
+      publishedAt: row.published_at?.toISOString() ?? null,
+      archivedAt: row.archived_at?.toISOString() ?? null,
+    });
+    albums.set(row.album_id, album);
+  }
+  return [...albums.values()];
+}
+
+export async function correctAlbumMetadata(
+  albumId: string,
+  revisionId: string,
+  metadata: { title: string; description: string | null },
+  pool: Pool = getPool(),
+): Promise<void> {
+  await withTransaction(async (client) => {
+    const current = await query<{ title: string; description: string | null }>(
+      `SELECT a.title, a.description
+         FROM albums a
+         JOIN album_revisions r ON r.album_id = a.id
+        WHERE a.id = $1 AND r.id = $2
+        FOR UPDATE OF a`,
+      [albumId, revisionId],
+      client,
+    );
+    const album = current.rows[0];
+    if (!album) throw new CatalogError("Album revision not found.", 404);
+    for (const [field, previous, corrected] of [
+      ["title", album.title, metadata.title],
+      ["description", album.description, metadata.description],
+    ] as const) {
+      if (previous === corrected) continue;
+      await query(
+        `INSERT INTO album_metadata_corrections
+           (revision_id, entity_type, entity_id, field_name, previous_value, corrected_value)
+         VALUES ($1, 'album', $2, $3, $4, $5)`,
+        [revisionId, albumId, field, previous, corrected ?? ""],
+        client,
+      );
+    }
+    await query(
+      "UPDATE albums SET title = $1, description = $2, updated_at = now() WHERE id = $3",
+      [metadata.title, metadata.description, albumId],
+      client,
+    );
+  }, pool);
 }
 
 export async function getCurrentRevision(

@@ -35,7 +35,7 @@ Running `./start.sh` again is safe: existing secrets and PostgreSQL data are ret
 
 ## Current status
 
-The repository contains the first usable MVP: PostgreSQL persistence, Better Auth sessions, administrator-managed user accounts, multiple personal albums, mobile sticker search and filters, and quantity tracking from zero through 99. Trade matching, self-registration, invitations, and catalog administration remain on the [GitHub roadmap](https://github.com/descipar/stickerfolio/issues).
+The repository contains the first usable MVP: PostgreSQL persistence, Better Auth sessions, administrator-managed user accounts, administrator-managed album templates, multiple personal albums, mobile sticker search and filters, and quantity tracking from zero through 99. Trade matching, self-registration, and invitations remain on the [GitHub roadmap](https://github.com/descipar/stickerfolio/issues).
 
 The agreed product and architecture decisions are documented in the [roadmap](docs/ROADMAP.md).
 The provider-neutral catalog interchange contract is documented in the [album template format](docs/ALBUM_TEMPLATE_FORMAT.md).
@@ -80,6 +80,8 @@ On a completely empty database, the migration command creates exactly one restri
 - initial password: `admin123!`
 
 The bootstrap account must choose a new password before any administration feature is available. It has no collector profile, album, or holdings. After changing the password, use **Users** to create normal accounts with a display name and temporary password. Every newly created user must also change that password at first sign-in.
+
+Use **Album templates** to upload a portable JSON template or generate a small starter document in the browser. Every administrative import is validated atomically and created as a draft, regardless of the status contained in the uploaded document. Publishing a draft archives the previously published revision while existing personal collections remain pinned to their original revision. Archiving a published revision without a replacement prevents new collections for that album but does not modify existing holdings.
 
 ## Quality checks
 
