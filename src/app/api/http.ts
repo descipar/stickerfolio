@@ -32,3 +32,7 @@ export function apiError(error: unknown): NextResponse {
   }
   return NextResponse.json({ error: "The request could not be completed." }, { status: 500 });
 }
+
+export function requestBodyTooLarge(): NextResponse {
+  return NextResponse.json({ error: "Request body is too large." }, { status: 413 });
+}

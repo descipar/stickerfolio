@@ -1,8 +1,11 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 
+import { readLimitedJson } from "@/infrastructure/http";
 import { AuthenticationError, changeOwnPassword } from "@/modules/identity";
 import { maximumPasswordLength, minimumPasswordLength } from "@/shared/password-policy";
+
+import { requestBodyTooLarge } from "../../http";
 
 const bodySchema = z.object({
   currentPassword: z.string().min(1).max(128),
@@ -10,7 +13,9 @@ const bodySchema = z.object({
 });
 
 export async function POST(request: Request): Promise<NextResponse> {
-  const parsed = bodySchema.safeParse(await request.json().catch(() => null));
+  const requestBody = await readLimitedJson(request);
+  if (requestBody.status === "too-large") return requestBodyTooLarge();
+  const parsed = bodySchema.safeParse(requestBody.status === "ok" ? requestBody.value : null);
   if (!parsed.success) return NextResponse.json({ error: "Invalid password input." }, { status: 400 });
 
   try {

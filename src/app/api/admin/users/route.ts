@@ -1,10 +1,11 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 
+import { readLimitedJson } from "@/infrastructure/http";
 import { createManagedUser, listManagedUsers } from "@/modules/admin";
 import { maximumPasswordLength, minimumPasswordLength } from "@/shared/password-policy";
 
-import { apiError } from "../../http";
+import { apiError, requestBodyTooLarge } from "../../http";
 
 const createSchema = z.object({
   email: z.email().max(254),
@@ -22,7 +23,9 @@ export async function GET(request: Request): Promise<NextResponse> {
 }
 
 export async function POST(request: Request): Promise<NextResponse> {
-  const body = createSchema.safeParse(await request.json().catch(() => null));
+  const requestBody = await readLimitedJson(request);
+  if (requestBody.status === "too-large") return requestBodyTooLarge();
+  const body = createSchema.safeParse(requestBody.status === "ok" ? requestBody.value : null);
   if (!body.success) return NextResponse.json({ error: "Invalid account details." }, { status: 400 });
   try {
     return NextResponse.json(

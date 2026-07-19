@@ -4,6 +4,7 @@ import { betterAuth } from "better-auth";
 import { getEnvironment, type AppEnvironment } from "@/infrastructure/config";
 import { getPool } from "@/infrastructure/database";
 import { query } from "@/infrastructure/database";
+import { untrustedIpSinkHeader } from "@/infrastructure/http";
 import { maximumPasswordLength, minimumPasswordLength } from "@/shared/password-policy";
 
 import { hashPassword, verifyPassword } from "./password";
@@ -16,6 +17,16 @@ export function createAuth(environment: AppEnvironment, pool: Pool) {
     secret: environment.auth.secret,
     database: pool,
     trustedOrigins: [environment.appBaseUrl.origin],
+    rateLimit: {
+      enabled: true,
+      storage: "memory",
+      window: 60,
+      max: 100,
+      customRules: {
+        "/sign-in/email": { window: 60, max: 5 },
+        "/sign-up/email": { window: 60, max: 5 },
+      },
+    },
     emailAndPassword: {
       enabled: true,
       disableSignUp: true,
@@ -58,6 +69,9 @@ export function createAuth(environment: AppEnvironment, pool: Pool) {
     },
     advanced: {
       database: { generateId: false },
+      ipAddress: {
+        ipAddressHeaders: [environment.auth.trustedIpHeader ?? untrustedIpSinkHeader],
+      },
       useSecureCookies: environment.appBaseUrl.protocol === "https:",
       defaultCookieAttributes: {
         httpOnly: true,

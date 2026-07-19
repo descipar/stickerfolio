@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 
+import { readLimitedJson } from "@/infrastructure/http";
 import {
   resetManagedUserPassword,
   setManagedUserEmail,
@@ -10,7 +11,7 @@ import {
 import { loginEmailSchema } from "@/modules/identity";
 import { maximumPasswordLength, minimumPasswordLength } from "@/shared/password-policy";
 
-import { apiError } from "../../../http";
+import { apiError, requestBodyTooLarge } from "../../../http";
 
 const idSchema = z.uuid();
 const mutationSchema = z.discriminatedUnion("action", [
@@ -31,7 +32,9 @@ export async function PATCH(
   context: { params: Promise<{ userId: string }> },
 ): Promise<NextResponse> {
   const userId = idSchema.safeParse((await context.params).userId);
-  const mutation = mutationSchema.safeParse(await request.json().catch(() => null));
+  const requestBody = await readLimitedJson(request);
+  if (requestBody.status === "too-large") return requestBodyTooLarge();
+  const mutation = mutationSchema.safeParse(requestBody.status === "ok" ? requestBody.value : null);
   if (!userId.success || !mutation.success) {
     return NextResponse.json({ error: "Invalid user update." }, { status: 400 });
   }

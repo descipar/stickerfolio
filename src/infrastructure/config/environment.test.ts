@@ -61,6 +61,21 @@ describe("environment configuration", () => {
     });
   });
 
+  it("accepts only a valid explicit trusted client IP header", () => {
+    expect(
+      parseEnvironment({ ...validEnvironment, AUTH_TRUSTED_IP_HEADER: " X-Real-IP " }).auth,
+    ).toMatchObject({ trustedIpHeader: "x-real-ip" });
+    expect(() =>
+      parseEnvironment({ ...validEnvironment, AUTH_TRUSTED_IP_HEADER: "x-real-ip, x-forwarded-for" }),
+    ).toThrow("valid HTTP header name");
+    expect(() =>
+      parseEnvironment({
+        ...validEnvironment,
+        AUTH_TRUSTED_IP_HEADER: "x-stickerfolio-untrusted-ip-sink",
+      }),
+    ).toThrow("reserved Stickerfolio header");
+  });
+
   it("fails clearly when required values are missing", () => {
     expect(() => parseEnvironment({})).toThrow(EnvironmentValidationError);
     expect(() => parseEnvironment({})).toThrow("DATABASE_URL");
