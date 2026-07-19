@@ -222,3 +222,11 @@ src/
 ```
 
 Modules expose their public APIs through their root `index.ts` files. Imports between modules, and direct database access from the UI or HTTP layer, are enforced by ESLint. See [Application architecture](docs/ARCHITECTURE.md) for the dependency graph and persistence rules.
+
+## License
+
+Stickerfolio is licensed under the [PolyForm Noncommercial License 1.0.0](LICENSE).
+
+You may use, modify, and distribute this software for **noncommercial purposes** only — including personal, hobby, educational, research, and use by nonprofit or government organizations. **Commercial use is not permitted** under this license. Any copy or derivative must retain the required attribution notice: `Copyright 2026 Kai Schulte`.
+
+This is a source-available license, not an OSI-approved open-source license. For commercial licensing, contact the author.
