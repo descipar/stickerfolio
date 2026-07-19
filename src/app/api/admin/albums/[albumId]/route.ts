@@ -1,9 +1,10 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 
+import { readLimitedJson } from "@/infrastructure/http";
 import { updateAdminAlbumMetadata } from "@/modules/admin";
 
-import { apiError } from "../../../http";
+import { apiError, requestBodyTooLarge } from "../../../http";
 
 const idSchema = z.uuid();
 const metadataSchema = z.object({
@@ -17,7 +18,9 @@ export async function PATCH(
   context: { params: Promise<{ albumId: string }> },
 ): Promise<NextResponse> {
   const albumId = idSchema.safeParse((await context.params).albumId);
-  const metadata = metadataSchema.safeParse(await request.json().catch(() => null));
+  const requestBody = await readLimitedJson(request);
+  if (requestBody.status === "too-large") return requestBodyTooLarge();
+  const metadata = metadataSchema.safeParse(requestBody.status === "ok" ? requestBody.value : null);
   if (!albumId.success || !metadata.success) {
     return NextResponse.json({ error: "Invalid album metadata." }, { status: 400 });
   }

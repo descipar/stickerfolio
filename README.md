@@ -85,6 +85,8 @@ The required settings are:
 
 Optional PostgreSQL TLS and SMTP settings are documented in [.env.example](.env.example). Invalid or missing required configuration stops server startup with a redacted error message.
 
+`AUTH_TRUSTED_IP_HEADER` is optional and must remain empty for direct deployments. Set it only when Stickerfolio is reachable exclusively through a trusted reverse proxy that removes any client-supplied value and writes the real client address into that single-value header. For example, a correctly configured proxy may use `X-Real-IP`. Stickerfolio deliberately ignores `X-Forwarded-For` and every other forwarded address by default so clients cannot rotate spoofed values to evade authentication limits.
+
 ```bash
 pnpm install
 pnpm db:migrate
@@ -222,6 +224,14 @@ pnpm start
 ```
 
 The production server listens on port `3500`.
+
+## HTTP security baseline
+
+Login and future self-registration attempts are limited to five requests per minute and client address. Invitation redemption uses the same five-per-minute policy as soon as that endpoint is introduced. These counters are held in the application process: they are appropriate for the documented single-instance deployment, but multiple application replicas are unsupported until the limiter uses shared storage.
+
+Without a configured trusted client IP header, all callers share a conservative per-endpoint bucket. This is safe against spoofed forwarding headers, but may cause one busy client to throttle others temporarily. Configure a trusted overwritten header only when the origin cannot be reached around the reverse proxy.
+
+State-changing API requests are checked against `APP_BASE_URL` using the browser `Origin` and Fetch Metadata headers. Session cookies are HTTP-only and `SameSite=Lax`; HTTPS deployments also receive Secure cookies. JSON request bodies are limited to 32 KiB, album-template imports to 2 MiB, and responses include a restrictive content security policy, clickjacking protection, MIME sniffing protection, a limited referrer policy, and disabled camera, location, and microphone access. TLS termination should add HSTS after HTTPS has been verified for the complete public hostname.
 
 ## Health and version endpoints
 

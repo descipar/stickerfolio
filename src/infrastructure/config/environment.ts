@@ -11,6 +11,16 @@ const optionalText = z.preprocess(
   z.string().trim().optional(),
 );
 
+const optionalHeaderName = z.preprocess(
+  (value) => (typeof value === "string" && value.trim() === "" ? undefined : value),
+  z
+    .string()
+    .trim()
+    .toLowerCase()
+    .regex(/^[a-z0-9-]+$/, "AUTH_TRUSTED_IP_HEADER must be a valid HTTP header name")
+    .optional(),
+);
+
 const optionalBoolean = z.preprocess(
   (value) => (typeof value === "string" && value.trim() === "" ? undefined : value),
   z.enum(["true", "false"]).default("false"),
@@ -52,6 +62,7 @@ const environmentSchema = z
       32,
       "BETTER_AUTH_SECRET must contain at least 32 characters",
     ),
+    AUTH_TRUSTED_IP_HEADER: optionalHeaderName,
     REGISTRATION_MODE: z.enum(registrationModes).default("closed"),
     DATABASE_SSL_MODE: z.enum(databaseSslModes).default("disable"),
     DATABASE_SSL_CA: optionalText,
@@ -66,6 +77,13 @@ const environmentSchema = z
     SMTP_FROM: optionalText,
   })
   .superRefine((value, context) => {
+    if (value.AUTH_TRUSTED_IP_HEADER === "x-stickerfolio-untrusted-ip-sink") {
+      context.addIssue({
+        code: "custom",
+        path: ["AUTH_TRUSTED_IP_HEADER"],
+        message: "AUTH_TRUSTED_IP_HEADER uses a reserved Stickerfolio header",
+      });
+    }
     if (["verify-ca", "verify-full"].includes(value.DATABASE_SSL_MODE) && !value.DATABASE_SSL_CA) {
       context.addIssue({
         code: "custom",
@@ -109,6 +127,7 @@ export interface AppEnvironment {
   };
   auth: {
     secret: string;
+    trustedIpHeader?: string;
   };
   smtp: null | {
     host: string;
@@ -149,7 +168,12 @@ export function parseEnvironment(source: Record<string, string | undefined>): Ap
       connectionTimeoutMs: value.DATABASE_CONNECTION_TIMEOUT_MS,
       ...(value.DATABASE_SSL_CA ? { certificateAuthority: value.DATABASE_SSL_CA } : {}),
     },
-    auth: { secret: value.BETTER_AUTH_SECRET },
+    auth: {
+      secret: value.BETTER_AUTH_SECRET,
+      ...(value.AUTH_TRUSTED_IP_HEADER
+        ? { trustedIpHeader: value.AUTH_TRUSTED_IP_HEADER }
+        : {}),
+    },
     smtp: smtpConfigured
       ? {
           host: value.SMTP_HOST!,

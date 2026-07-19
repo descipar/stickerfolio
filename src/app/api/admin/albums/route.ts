@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 
+import { readLimitedText } from "@/infrastructure/http";
 import { importAdminAlbumTemplate, listAdminAlbums } from "@/modules/admin";
 
 import { apiError } from "../../http";
@@ -15,17 +16,16 @@ export async function GET(request: Request): Promise<NextResponse> {
 }
 
 export async function POST(request: Request): Promise<NextResponse> {
-  const declaredLength = Number(request.headers.get("content-length") ?? 0);
-  if (Number.isFinite(declaredLength) && declaredLength > maximumTemplateBytes) {
+  const requestBody = await readLimitedText(request, maximumTemplateBytes);
+  if (requestBody.status === "too-large") {
     return NextResponse.json({ error: "The album template is larger than 2 MB." }, { status: 413 });
   }
-  const text = await request.text();
-  if (new TextEncoder().encode(text).byteLength > maximumTemplateBytes) {
-    return NextResponse.json({ error: "The album template is larger than 2 MB." }, { status: 413 });
+  if (requestBody.status === "invalid") {
+    return NextResponse.json({ error: "The album template is not valid JSON." }, { status: 400 });
   }
   let template: unknown;
   try {
-    template = JSON.parse(text);
+    template = JSON.parse(requestBody.value);
   } catch {
     return NextResponse.json({ error: "The album template is not valid JSON." }, { status: 400 });
   }

@@ -1,9 +1,10 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 
+import { readLimitedJson } from "@/infrastructure/http";
 import { addOwnCollection, getCollectionsOverview } from "@/modules/collections";
 
-import { apiError } from "../http";
+import { apiError, requestBodyTooLarge } from "../http";
 
 const createSchema = z.object({ albumId: z.uuid() });
 
@@ -16,7 +17,9 @@ export async function GET(request: Request): Promise<NextResponse> {
 }
 
 export async function POST(request: Request): Promise<NextResponse> {
-  const body = createSchema.safeParse(await request.json().catch(() => null));
+  const requestBody = await readLimitedJson(request);
+  if (requestBody.status === "too-large") return requestBodyTooLarge();
+  const body = createSchema.safeParse(requestBody.status === "ok" ? requestBody.value : null);
   if (!body.success) return NextResponse.json({ error: "Invalid album." }, { status: 400 });
   try {
     const collection = await addOwnCollection(request.headers, body.data.albumId);
