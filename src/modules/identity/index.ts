@@ -13,7 +13,7 @@ export {
 } from "./profiles";
 export { changeOwnPassword } from "./change-password";
 export { changeOwnEmail, EmailChangeError } from "./change-email";
-export { normalizeEmail } from "./email";
+export { loginEmailSchema, normalizeEmail } from "./email";
 export {
   AuthenticationError,
   requireCollector,

@@ -1,4 +1,4 @@
-import { afterAll, beforeAll, describe, expect, inject, it } from "vitest";
+import { afterAll, beforeAll, describe, expect, inject, it, vi } from "vitest";
 
 import { createPool, query } from "@/infrastructure/database";
 import { AdminError, createManagedUser, setManagedUserEmail } from "@/modules/admin";
@@ -35,6 +35,7 @@ async function signIn(email: string, password: string): Promise<{ response: Resp
 
 describe("login email changes (self-service and admin)", () => {
   let adminHeaders: Headers;
+  let adminId: string;
   let aliceHeaders: Headers;
   let aliceId: string;
   let bobId: string;
@@ -45,6 +46,8 @@ describe("login email changes (self-service and admin)", () => {
     const initial = await signIn(bootstrapAdminEmail, bootstrapAdminPassword);
     await changeOwnPassword(initial.headers, bootstrapAdminPassword, "Admin-1!", auth, pool);
     adminHeaders = (await signIn(bootstrapAdminEmail, "Admin-1!")).headers;
+    const admin = await query<{ id: string }>(`SELECT id FROM "user" WHERE email = $1`, [bootstrapAdminEmail], pool);
+    adminId = admin.rows[0]!.id;
 
     const alice = await createManagedUser(adminHeaders, {
       email: "alice@example.test",
@@ -97,7 +100,21 @@ describe("login email changes (self-service and admin)", () => {
 
   it("lets an administrator change another user's email and revokes that user's sessions", async () => {
     const bobHeaders = (await signIn("bob@example.test", "Bob-pass-1!")).headers;
-    await setManagedUserEmail(adminHeaders, bobId, "Bob-New@Example.Test", auth, pool);
+    const output = vi.spyOn(console, "log").mockImplementation(() => undefined);
+    await setManagedUserEmail(adminHeaders, bobId, "  Bob-New@Example.Test  ", auth, pool);
+    const auditEvent = output.mock.calls
+      .map(([message]) => JSON.parse(String(message)) as Record<string, unknown>)
+      .find((entry) => entry.event === "identity.email_changed");
+    output.mockRestore();
+
+    expect(auditEvent).toMatchObject({
+      level: "info",
+      event: "identity.email_changed",
+      userId: bobId,
+      actor: "admin",
+      actorUserId: adminId,
+    });
+    expect(JSON.stringify(auditEvent).toLowerCase()).not.toContain("bob-new@example.test");
     await expect(auth.api.getSession({ headers: bobHeaders })).resolves.toBeNull();
     expect((await signIn("bob@example.test", "Bob-pass-1!")).response.status).not.toBe(200);
     expect((await signIn("bob-new@example.test", "Bob-pass-1!")).response.status).toBe(200);

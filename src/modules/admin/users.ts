@@ -1,6 +1,7 @@
 import type { Pool, PoolClient } from "pg";
 
 import { DatabaseError, getPool, query, withTransaction } from "@/infrastructure/database";
+import { writeLog } from "@/infrastructure/observability";
 import {
   hashPassword,
   normalizeEmail,
@@ -133,7 +134,7 @@ export async function setManagedUserEmail(
   auth?: StickerfolioAuth,
   pool: Pool = getPool(),
 ): Promise<void> {
-  await requireAdmin(headers, auth, pool);
+  const actor = await requireAdmin(headers, auth, pool);
   const normalized = normalizeEmail(email);
   try {
     await withTransaction(async (client) => {
@@ -155,6 +156,11 @@ export async function setManagedUserEmail(
     }
     throw error;
   }
+  writeLog("info", "identity.email_changed", {
+    userId,
+    actor: "admin",
+    actorUserId: actor.userId,
+  });
 }
 
 interface CreateManagedUserInput {
