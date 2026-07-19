@@ -10,10 +10,14 @@ Stickerfolio currently provides:
 - multiple personal albums per collector;
 - mobile-friendly sticker, team, search, and status views;
 - quantities from zero through 99, including explicit duplicate counts;
+- separate CSV exports for missing stickers and available duplicates;
+- self-service and administrator-managed login email changes with session revocation;
 - administrator-managed users and portable album templates;
 - PostgreSQL persistence with self-hosted Docker deployment by default.
 
-Trading is a central product goal. The shared album catalog and exact duplicate quantities provide the foundation for automatically finding collectors who can help each other: one collector is missing a sticker that another owns more than once, and a two-way match exists when both collectors can offer something the other still needs. The planned first trading view is intentionally read-only and privacy-preserving. Participation will be opt-in, matching will expose only display names and relevant sticker codes, and it will not change holdings, reserve stickers, or claim that a trade has happened. Trade requests and in-app messages can be added later on top of that verified matching model.
+Trading is a central product goal. Collectors can already download two focused CSV files for each personal album: a wanted list containing every missing sticker and a swap list containing every duplicate together with its available spare count. These files can be shared directly with other collectors or used while buying and sorting stickers; no manual filtering of the complete album data is required.
+
+The shared album catalog and exact duplicate quantities also provide the foundation for automatically finding collectors who can help each other: one collector is missing a sticker that another owns more than once, and a two-way match exists when both collectors can offer something the other still needs. The planned first automatic matching view is intentionally read-only and privacy-preserving. Participation will be opt-in, matching will expose only display names and relevant sticker codes, and it will not change holdings, reserve stickers, or claim that a trade has happened. Trade requests and in-app messages can be added later on top of that verified matching model.
 
 The current MVP already handles the collection data needed for this workflow. Automatic trade-partner matching itself is still under development and is tracked in the [GitHub issues](https://github.com/descipar/stickerfolio/issues).
 
@@ -50,7 +54,7 @@ Running `./start.sh` again is safe: existing secrets and PostgreSQL data are ret
 
 ## Current status
 
-The repository contains the first usable MVP: PostgreSQL persistence, Better Auth sessions, administrator-managed user accounts, administrator-managed album templates, multiple personal albums, mobile sticker search and filters, and quantity tracking from zero through 99. Trade matching, self-registration, and invitations remain on the [GitHub roadmap](https://github.com/descipar/stickerfolio/issues).
+The repository contains the first usable MVP: PostgreSQL persistence, Better Auth sessions, administrator-managed user accounts, self-service and administrator-managed login email changes, administrator-managed album templates, multiple personal albums, mobile sticker search and filters, quantity tracking from zero through 99, and separate CSV exports for missing stickers and duplicates. Successful email changes revoke the affected account's active sessions, and security-sensitive email changes are emitted as data-minimized structured audit events. Automatic trade matching, self-registration, and invitations remain on the [GitHub roadmap](https://github.com/descipar/stickerfolio/issues).
 
 The agreed product and architecture decisions are documented in the [roadmap](docs/ROADMAP.md).
 The provider-neutral catalog interchange contract is documented in the [album template format](docs/ALBUM_TEMPLATE_FORMAT.md).
@@ -97,6 +101,14 @@ On a completely empty database, the migration command creates exactly one restri
 The bootstrap account must choose a new password before any administration feature is available. It has no collector profile, album, or holdings. After changing the password, use **Users** to create normal accounts with a display name and temporary password. Every newly created user must also change that password at first sign-in.
 
 Use **Album templates** to upload a portable JSON template or generate a small starter document in the browser. Every administrative import is validated atomically and created as a draft, regardless of the status contained in the uploaded document. Publishing a draft archives the previously published revision while existing personal collections remain pinned to their original revision. Archiving a published revision without a replacement prevents new collections for that album but does not modify existing holdings.
+
+## Using personal collections
+
+After an administrator has published an album template, collectors can add that album to their personal collection. Inside an album, use the search field, status filters, and horizontally scrollable section or team selector to find stickers on both desktop and mobile. Set a quantity to zero for a missing sticker, one for an owned sticker, or a higher value when spare copies are available.
+
+The album view provides separate **Export missing list (CSV)** and **Export duplicates list (CSV)** actions. The missing export contains every sticker with quantity zero. The duplicates export contains only quantities greater than one and includes both the total quantity and the number of spare copies. Exports contain only the signed-in collector's own collection data.
+
+Every user can change their own login address from **Account** after confirming the current password. Administrators can also correct another user's address from **Users**. A successful change signs the affected user out on all devices; the next login uses the normalized new address.
 
 ## Quality checks
 
