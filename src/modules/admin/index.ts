@@ -4,6 +4,7 @@ export {
   createManagedUser,
   listManagedUsers,
   resetManagedUserPassword,
+  setManagedUserEmail,
   setManagedUserRole,
   setManagedUserStatus,
   type ManagedUser,

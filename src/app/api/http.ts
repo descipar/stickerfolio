@@ -3,7 +3,7 @@ import { NextResponse } from "next/server";
 import { AdminError } from "@/modules/admin";
 import { CatalogError } from "@/modules/catalog";
 import { CollectionError } from "@/modules/collections";
-import { AuthenticationError } from "@/modules/identity";
+import { AuthenticationError, EmailChangeError } from "@/modules/identity";
 
 export function apiError(error: unknown): NextResponse {
   if (error instanceof AdminError) {
@@ -17,6 +17,9 @@ export function apiError(error: unknown): NextResponse {
       { error: error.status === 401 ? "Authentication required." : "Access denied." },
       { status: error.status },
     );
+  }
+  if (error instanceof EmailChangeError) {
+    return NextResponse.json({ error: error.message }, { status: error.status });
   }
   if (error instanceof CollectionError) {
     return NextResponse.json(

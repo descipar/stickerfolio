@@ -105,12 +105,12 @@ export function AdminUsers({ currentUserId }: { currentUserId: string }) {
     if (!response.ok) {
       const body = await response.json().catch(() => null) as { error?: string } | null;
       setError(body?.error ?? "The email address could not be changed.");
-    } else {
-      form.reset();
-      setMessage("Login email updated.");
-      await load();
+      setPending(false);
+      return;
     }
-    setPending(false);
+    // Changing your own email revokes every session, including this one, so
+    // re-authenticate with the new address.
+    window.location.assign("/login");
   }
 
   return (
@@ -164,33 +164,58 @@ export function AdminUsers({ currentUserId }: { currentUserId: string }) {
                   <button className="secondary-button" disabled={pending || self} onClick={() => void mutate(user.id, { action: "role", role: user.role === "admin" ? "user" : "admin" }, "Role updated.")}>{user.role === "admin" ? "Make user" : "Make admin"}</button>
                   <button className="secondary-button" disabled={pending || self} onClick={() => void mutate(user.id, { action: "status", status: user.status === "active" ? "suspended" : "active" }, user.status === "active" ? "User suspended and sessions revoked." : "User activated.")}>{user.status === "active" ? "Suspend" : "Activate"}</button>
                   {!self ? (
-                    <details className="password-reset">
-                      <summary>Reset password</summary>
-                      <form onSubmit={(event) => {
-                        event.preventDefault();
-                        const form = event.currentTarget;
-                        const password = String(new FormData(form).get("password") ?? "");
-                        void mutate(user.id, { action: "reset-password", password }, "Password reset and active sessions revoked.").then(() => form.reset());
-                      }}>
-                        <label>
-                          <span className="visually-hidden">New temporary password for {user.email}</span>
-                          <span className="field-hint" id={`reset-password-hint-${user.id}`}>
-                            At least {minimumPasswordLength} characters
-                          </span>
-                          <input
-                            name="password"
-                            type="password"
-                            minLength={minimumPasswordLength}
-                            maxLength={maximumPasswordLength}
-                            aria-describedby={`reset-password-hint-${user.id}`}
-                            required
-                            autoComplete="new-password"
-                            placeholder="Temporary password"
-                          />
-                        </label>
-                        <button className="primary-button" type="submit" disabled={pending}>Set password</button>
-                      </form>
-                    </details>
+                    <>
+                      <details className="password-reset">
+                        <summary>Reset password</summary>
+                        <form onSubmit={(event) => {
+                          event.preventDefault();
+                          const form = event.currentTarget;
+                          const password = String(new FormData(form).get("password") ?? "");
+                          void mutate(user.id, { action: "reset-password", password }, "Password reset and active sessions revoked.").then(() => form.reset());
+                        }}>
+                          <label>
+                            <span className="visually-hidden">New temporary password for {user.email}</span>
+                            <span className="field-hint" id={`reset-password-hint-${user.id}`}>
+                              At least {minimumPasswordLength} characters
+                            </span>
+                            <input
+                              name="password"
+                              type="password"
+                              minLength={minimumPasswordLength}
+                              maxLength={maximumPasswordLength}
+                              aria-describedby={`reset-password-hint-${user.id}`}
+                              required
+                              autoComplete="new-password"
+                              placeholder="Temporary password"
+                            />
+                          </label>
+                          <button className="primary-button" type="submit" disabled={pending}>Set password</button>
+                        </form>
+                      </details>
+                      <details className="password-reset">
+                        <summary>Change login email</summary>
+                        <form key={user.email} onSubmit={(event) => {
+                          event.preventDefault();
+                          const form = event.currentTarget;
+                          const email = String(new FormData(form).get("email") ?? "");
+                          void mutate(user.id, { action: "email", email }, "Login email updated and the user's sessions were revoked.").then(() => form.reset());
+                        }}>
+                          <label>
+                            <span className="visually-hidden">New login email for {user.email}</span>
+                            <input
+                              name="email"
+                              type="email"
+                              defaultValue={user.email}
+                              maxLength={254}
+                              required
+                              autoComplete="off"
+                              placeholder="New login email"
+                            />
+                          </label>
+                          <button className="primary-button" type="submit" disabled={pending}>Set email</button>
+                        </form>
+                      </details>
+                    </>
                   ) : (
                     <details className="password-reset">
                       <summary>Change login email</summary>

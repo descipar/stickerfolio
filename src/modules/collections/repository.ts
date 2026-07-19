@@ -34,6 +34,25 @@ export interface CollectionSticker {
   quantity: number;
 }
 
+export type CollectionExportType = "missing" | "duplicates";
+
+export interface CollectionExportSticker {
+  code: string;
+  label: string;
+  sectionCode: string;
+  sectionName: string;
+  quantity: number;
+  spareCount: number;
+}
+
+export interface CollectionExport {
+  albumTitle: string;
+  albumSlug: string;
+  revisionNumber: number;
+  type: CollectionExportType;
+  stickers: CollectionExportSticker[];
+}
+
 export async function createCollectorProfile(
   displayName: string,
   executor?: QueryExecutor,
@@ -158,6 +177,71 @@ export async function loadCollectionStickers(
     sortOrder: row.sort_order,
     quantity: row.quantity,
   }));
+}
+
+/**
+ * Builds a swap/wanted list for one owned collection. The query is scoped by
+ * collector_id so a collector can never export another collector's collection
+ * (foreign or unknown ids resolve to a 404). The same derivations feed later
+ * trade matching, so they live in the repository and stay reusable:
+ *   - missing:    revision stickers with no holdings row (domain quantity 0),
+ *                 derived via an anti-join.
+ *   - duplicates: holdings with quantity > 1, exposing quantity - 1 spare copies.
+ * Ordering is deterministic (section, then sticker order and code) so exported
+ * files are stable. An empty list is valid and yields zero rows.
+ */
+export async function loadCollectionExport(
+  collectorId: string,
+  collectionId: string,
+  type: CollectionExportType,
+  executor?: QueryExecutor,
+): Promise<CollectionExport> {
+  const collection = await query<{ album_title: string; album_slug: string; revision_number: number }>(
+    `SELECT a.title AS album_title, a.slug AS album_slug, r.revision_number
+       FROM collections c
+       JOIN albums a ON a.id = c.album_id
+       JOIN album_revisions r ON r.id = c.revision_id
+      WHERE c.id = $1 AND c.collector_id = $2 AND c.status = 'active'`,
+    [collectionId, collectorId],
+    executor,
+  );
+  const meta = collection.rows[0];
+  if (!meta) throw new CollectionError("Collection not found.", 404);
+
+  const condition = type === "missing" ? "h.sticker_id IS NULL" : "h.quantity > 1";
+  const result = await query<{
+    code: string;
+    label: string;
+    section_code: string;
+    section_name: string;
+    quantity: number;
+  }>(
+    `SELECT rs.code, rs.label, s.code AS section_code, s.name AS section_name,
+            COALESCE(h.quantity, 0)::integer AS quantity
+       FROM collections c
+       JOIN album_revision_stickers rs ON rs.revision_id = c.revision_id
+       JOIN album_sections s ON s.id = rs.section_id
+       LEFT JOIN holdings h ON h.collection_id = c.id AND h.sticker_id = rs.sticker_id
+      WHERE c.id = $1 AND c.collector_id = $2 AND c.status = 'active' AND ${condition}
+      ORDER BY s.sort_order, rs.sort_order, rs.code`,
+    [collectionId, collectorId],
+    executor,
+  );
+
+  return {
+    albumTitle: meta.album_title,
+    albumSlug: meta.album_slug,
+    revisionNumber: meta.revision_number,
+    type,
+    stickers: result.rows.map((row) => ({
+      code: row.code,
+      label: row.label,
+      sectionCode: row.section_code,
+      sectionName: row.section_name,
+      quantity: row.quantity,
+      spareCount: Math.max(0, row.quantity - 1),
+    })),
+  };
 }
 
 async function updateQuantity(

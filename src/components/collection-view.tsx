@@ -161,6 +161,15 @@ export function CollectionView({ collectionId }: { collectionId: string }) {
         <article><span>Duplicates</span><strong>{progress.duplicates}</strong></article>
       </section>
 
+      <section className="collection-export" aria-label="Export lists as CSV">
+        <a className="secondary-button" href={`/api/collections/${collectionId}/export?type=missing`} download>
+          Export missing list (CSV)
+        </a>
+        <a className="secondary-button" href={`/api/collections/${collectionId}/export?type=duplicates`} download>
+          Export duplicates list (CSV)
+        </a>
+      </section>
+
       <section className="collection-controls" aria-label="Find and filter stickers">
         <label className="search-field collection-search">
           <span aria-hidden="true">⌕</span>
