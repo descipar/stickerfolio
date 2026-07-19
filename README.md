@@ -21,6 +21,16 @@ The shared album catalog and exact duplicate quantities also provide the foundat
 
 The current MVP already handles the collection data needed for this workflow. Automatic trade-partner matching itself is still under development and is tracked in the [GitHub issues](https://github.com/descipar/stickerfolio/issues).
 
+## Mobile interface
+
+Stickerfolio is designed around the quick checks collectors make while opening packs, sorting duplicates, and comparing albums. The responsive interface keeps collection progress, team filters, missing stickers, and spare-copy quantities usable on a phone without hiding the underlying album structure.
+
+The screenshots use neutral demonstration data:
+
+| Album overview | Sticker and team view |
+| --- | --- |
+| <img src="docs/images/stickerfolio-albums-mobile.png" width="390" alt="Mobile Stickerfolio album overview with collection progress, missing stickers, and duplicate totals"> | <img src="docs/images/stickerfolio-album-detail-mobile.png" width="390" alt="Mobile Stickerfolio album detail with team filters, missing stickers, owned stickers, and duplicate quantities"> |
+
 ## Quick start on Raspberry Pi
 
 GitHub no longer accepts account passwords for Git operations. Because this repository is private, configure a read-only SSH deploy key once on the Raspberry Pi:
