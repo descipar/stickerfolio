@@ -1,3 +1,4 @@
+export { AccountDangerZone } from "./account-danger-zone";
 export { AdminUsers } from "./admin-users";
 export { AdminAlbums } from "./admin-albums";
 export { AlbumsOverview } from "./albums-overview";
