@@ -20,6 +20,19 @@ const modeCopy: Record<RegistrationMode, string> = {
   open: "Open self-registration is enabled. Anyone who can reach the app can create an account.",
 };
 
+/**
+ * A fetch aborted by our AbortController (on unmount/effect re-run) rejects with an
+ * AbortError. That is expected teardown and must be ignored; any other rejection is a
+ * genuine failure that should surface to the user.
+ */
+export function isAbortError(cause: unknown): boolean {
+  return (
+    typeof cause === "object" &&
+    cause !== null &&
+    (cause as { name?: unknown }).name === "AbortError"
+  );
+}
+
 export function AdminRegistration({
   mode,
   invitationsEnabled,
@@ -54,8 +67,11 @@ export function AdminRegistration({
         const data = (await response.json()) as { invitations: Invitation[] };
         setInvitations(data.invitations);
       })
-      .catch(() => {
-        // Ignore aborts from unmount/re-run; other failures surface via reload.
+      .catch((cause: unknown) => {
+        // Ignore the abort from unmount/effect re-run; surface any genuine failure
+        // so the user sees an error instead of an endless loading state.
+        if (isAbortError(cause)) return;
+        setError("Invitations could not be loaded.");
       });
     return () => controller.abort();
   }, [invitationsEnabled]);
