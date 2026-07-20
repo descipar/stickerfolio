@@ -4,3 +4,5 @@ export { AlbumsOverview } from "./albums-overview";
 export { AppNavigation } from "./app-navigation";
 export { CollectionView } from "./collection-view";
 export { EmailChangeForm } from "./email-change-form";
+export { TradingPreferenceForm } from "./trading-preference-form";
+export { TradeMatches } from "./trade-matches";

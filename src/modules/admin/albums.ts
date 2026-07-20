@@ -1,6 +1,7 @@
 import type { Pool } from "pg";
 
 import { getPool } from "@/infrastructure/database";
+import { writeAuditEvent } from "@/infrastructure/observability";
 import {
   archiveRevision,
   correctAlbumMetadata,
@@ -40,12 +41,17 @@ export async function setAdminRevisionStatus(
   auth?: StickerfolioAuth,
   pool: Pool = getPool(),
 ): Promise<void> {
-  await requireAdmin(headers, auth, pool);
+  const actor = await requireAdmin(headers, auth, pool);
   if (action === "publish") {
     await publishRevisionAndArchiveCurrent(revisionId, pool);
   } else {
     await archiveRevision(revisionId, pool);
   }
+  writeAuditEvent(
+    action === "publish" ? "album_revision.published" : "album_revision.archived",
+    { type: "user", userId: actor.userId },
+    { type: "album_revision", id: revisionId },
+  );
 }
 
 export async function updateAdminAlbumMetadata(

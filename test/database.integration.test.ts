@@ -68,7 +68,7 @@ describe("PostgreSQL persistence", () => {
   it("reports readiness and the applied schema version", async () => {
     const status = await getReadinessStatus(getPool(environment));
 
-    expect(status).toEqual({ status: "ready", app: "2.0.0-alpha.0", schema: "000003_identity_roles_and_profiles" });
+    expect(status).toEqual({ status: "ready", app: "2.0.0-alpha.0", schema: "000004_trading_preferences" });
   });
 
   it("commits successful transactions", async () => {
