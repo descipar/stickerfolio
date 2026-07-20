@@ -21,10 +21,12 @@ export {
 } from "./seed-example-holdings";
 export {
   addOwnCollection,
+  completeOnboarding,
   exportOwnCollection,
   getCollectionsOverview,
   getOwnCollectionStickers,
   removeOwnCollection,
   setOwnHoldingQuantity,
   type CollectionsOverview,
+  type OnboardingResult,
 } from "./access";

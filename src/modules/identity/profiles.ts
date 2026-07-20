@@ -7,7 +7,7 @@ export interface IdentityContext {
   role: UserRole;
   status: "active" | "suspended";
   mustChangePassword: boolean;
-  collector: null | { id: string; displayName: string };
+  collector: null | { id: string; displayName: string; onboardingCompleted: boolean };
 }
 
 export async function getIdentityContext(
@@ -21,10 +21,11 @@ export async function getIdentityContext(
     must_change_password: boolean;
     collector_id: string | null;
     display_name: string | null;
+    onboarding_completed_at: Date | null;
   }>(
     `SELECT u.id AS user_id, u.role, u.status,
             u."mustChangePassword" AS must_change_password,
-            cp.id AS collector_id, cp.display_name
+            cp.id AS collector_id, cp.display_name, cp.onboarding_completed_at
        FROM "user" u
        LEFT JOIN collector_profiles cp ON cp.user_id = u.id
       WHERE u.id = $1`,
@@ -39,7 +40,11 @@ export async function getIdentityContext(
     status: row.status,
     mustChangePassword: row.must_change_password,
     collector: row.collector_id
-      ? { id: row.collector_id, displayName: row.display_name! }
+      ? {
+          id: row.collector_id,
+          displayName: row.display_name!,
+          onboardingCompleted: row.onboarding_completed_at !== null,
+        }
       : null,
   };
 }

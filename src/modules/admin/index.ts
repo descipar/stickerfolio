@@ -16,3 +16,16 @@ export {
   setAdminRevisionStatus,
   updateAdminAlbumMetadata,
 } from "./albums";
+export {
+  createAdminInvitation,
+  getRegistrationAvailability,
+  listAdminInvitations,
+  revokeAdminInvitation,
+} from "./invitations";
+export type {
+  CreatedInvitation,
+  InvitationStatus,
+  InvitationSummary,
+  RegistrationAvailability,
+  RegistrationMode,
+} from "@/modules/identity";

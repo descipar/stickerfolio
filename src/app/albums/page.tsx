@@ -10,6 +10,9 @@ export default async function AlbumsPage() {
   const identity = await resolveIdentity(await headers());
   if (!identity) redirect("/login");
   if (identity.mustChangePassword) redirect("/password/change");
+  // Onboarding is enforced server-side: an authenticated collector who has not
+  // completed onboarding cannot reach the albums area by navigating directly.
+  if (identity.collector && !identity.collector.onboardingCompleted) redirect("/onboarding");
 
   return (
     <main className="page-shell">
