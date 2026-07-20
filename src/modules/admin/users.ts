@@ -1,7 +1,7 @@
 import type { Pool, PoolClient } from "pg";
 
 import { DatabaseError, getPool, query, withTransaction } from "@/infrastructure/database";
-import { writeLog } from "@/infrastructure/observability";
+import { writeAuditEvent, writeLog } from "@/infrastructure/observability";
 import {
   hashPassword,
   normalizeEmail,
@@ -204,13 +204,19 @@ export async function createManagedUser(
   auth?: StickerfolioAuth,
   pool: Pool = getPool(),
 ): Promise<{ id: string }> {
-  await requireAdmin(headers, auth, pool);
+  const actor = await requireAdmin(headers, auth, pool);
   if (input.initialPassword.length < minimumPasswordLength || input.initialPassword.length > maximumPasswordLength) {
     throw new AdminError(`Passwords must contain ${minimumPasswordLength} through ${maximumPasswordLength} characters.`);
   }
   const passwordHash = await hashPassword(input.initialPassword);
   try {
     const id = await withTransaction((client) => insertManagedUser(client, input, passwordHash), pool);
+    writeAuditEvent(
+      "account.created",
+      { type: "user", userId: actor.userId },
+      { type: "user", id },
+      { role: input.role },
+    );
     return { id };
   } catch (error) {
     if (error instanceof DatabaseError && error.code === "23505") {
@@ -251,6 +257,11 @@ export async function resetManagedUserPassword(
     );
     await query(`DELETE FROM session WHERE "userId" = $1`, [userId], client);
   }, pool);
+  writeAuditEvent(
+    "account.password_reset",
+    { type: "user", userId: actor.userId },
+    { type: "user", id: userId },
+  );
 }
 
 export async function setManagedUserStatus(
@@ -275,6 +286,12 @@ export async function setManagedUserStatus(
       await query(`DELETE FROM session WHERE "userId" = $1`, [userId], client);
     }
   }, pool);
+  writeAuditEvent(
+    "account.status_changed",
+    { type: "user", userId: actor.userId },
+    { type: "user", id: userId },
+    { status },
+  );
 }
 
 export async function setManagedUserRole(
@@ -294,4 +311,10 @@ export async function setManagedUserRole(
     pool,
   );
   if (result.rowCount !== 1) throw new AdminError("User not found.", 404);
+  writeAuditEvent(
+    "account.role_changed",
+    { type: "user", userId: actor.userId },
+    { type: "user", id: userId },
+    { role },
+  );
 }

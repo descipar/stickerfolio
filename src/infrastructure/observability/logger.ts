@@ -2,7 +2,7 @@ export type LogLevel = "debug" | "info" | "warn" | "error";
 
 type LogContext = Record<string, unknown>;
 
-const sensitiveKey = /(?:authorization|cookie|password|secret|token|database.?url|connection.?string)/i;
+const sensitiveKey = /(?:authorization|cookie|password|secret|token|email|holdings?|database.?url|connection.?string)/i;
 const connectionUrl = /\b(postgres(?:ql)?):\/\/[^\s"']+/gi;
 
 function redactString(value: string): string {

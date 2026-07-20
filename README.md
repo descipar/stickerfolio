@@ -10,16 +10,18 @@ Stickerfolio currently provides:
 - multiple personal albums per collector;
 - mobile-friendly sticker, team, search, and status views;
 - quantities from zero through 99, including explicit duplicate counts;
+- private, opt-in trade matching with one-way and two-way suggestions;
+- trade filters by team or section, match type, and compatibility;
 - separate CSV exports for missing stickers and available duplicates;
 - self-service and administrator-managed login email changes with session revocation;
 - administrator-managed users and portable album templates;
 - PostgreSQL persistence with self-hosted Docker deployment by default.
 
-Trading is a central product goal. Collectors can already download two focused CSV files for each personal album: a wanted list containing every missing sticker and a swap list containing every duplicate together with its available spare count. These files can be shared directly with other collectors or used while buying and sorting stickers; no manual filtering of the complete album data is required.
+Trading is a central part of Stickerfolio. Collectors can opt in from their account settings and then open **Find trade partners** from an album. Stickerfolio compares missing stickers with actual spare copies from other opted-in collectors who collect the same logical album. It distinguishes one-way opportunities from two-way matches, ranks the strongest matches first, and supports filtering by team or section and sorting by what either collector can offer.
 
-The shared album catalog and exact duplicate quantities also provide the foundation for automatically finding collectors who can help each other: one collector is missing a sticker that another owns more than once, and a two-way match exists when both collectors can offer something the other still needs. The planned first automatic matching view is intentionally read-only and privacy-preserving. Participation will be opt-in, matching will expose only display names and relevant sticker codes, and it will not change holdings, reserve stickers, or claim that a trade has happened. Trade requests and in-app messages can be added later on top of that verified matching model.
+Matching is intentionally read-only and privacy-preserving. Participation is disabled by default. Results expose only the other collector's display name and the sticker codes relevant to that possible exchange—never email addresses or complete holdings. Matching uses stable sticker identities, so compatible stickers remain comparable when collectors use different published revisions of an album and the printed codes have changed. Viewing, filtering, or sorting matches never changes quantities, reserves stickers, or claims that a trade has happened.
 
-The current MVP already handles the collection data needed for this workflow. Automatic trade-partner matching itself is still under development and is tracked in the [GitHub issues](https://github.com/descipar/stickerfolio/issues).
+Collectors can also download two focused CSV files for each personal album: a wanted list containing every missing sticker and a swap list containing every duplicate together with its available spare count. Trade requests and in-app messages remain possible future additions and are tracked in the [GitHub issues](https://github.com/descipar/stickerfolio/issues).
 
 ## Mobile interface
 
@@ -30,6 +32,14 @@ The screenshots use neutral demonstration data:
 | Album overview | Sticker and team view |
 | --- | --- |
 | <img src="docs/images/stickerfolio-albums-mobile.png" width="390" alt="Mobile Stickerfolio album overview with collection progress, missing stickers, and duplicate totals"> | <img src="docs/images/stickerfolio-album-detail-mobile.png" width="390" alt="Mobile Stickerfolio album detail with team filters, missing stickers, owned stickers, and duplicate quantities"> |
+
+### Private trade matching
+
+Trade matching is a deliberate opt-in. Once enabled, each personal album can show relevant partners without revealing private account or collection data.
+
+| Trading preference | Trade matches |
+| --- | --- |
+| <img src="docs/images/stickerfolio-trading-preference-mobile.png" width="390" alt="Mobile Stickerfolio account setting for opting in to trade matching"> | <img src="docs/images/stickerfolio-trade-matches-mobile.png" width="390" alt="Mobile Stickerfolio trade matching view with filters and relevant exchangeable stickers"> |
 
 ## Quick start on Raspberry Pi
 
@@ -64,7 +74,7 @@ Running `./start.sh` again is safe: existing secrets and PostgreSQL data are ret
 
 ## Current status
 
-The repository contains the first usable MVP: PostgreSQL persistence, Better Auth sessions, administrator-managed user accounts, self-service and administrator-managed login email changes, administrator-managed album templates, multiple personal albums, mobile sticker search and filters, quantity tracking from zero through 99, and separate CSV exports for missing stickers and duplicates. Successful email changes revoke the affected account's active sessions, and security-sensitive email changes are emitted as data-minimized structured audit events. Automatic trade matching, self-registration, and invitations remain on the [GitHub roadmap](https://github.com/descipar/stickerfolio/issues).
+The repository contains the first usable MVP: PostgreSQL persistence, Better Auth sessions, administrator-managed user accounts, self-service and administrator-managed login email changes, administrator-managed album templates, multiple personal albums, mobile sticker search and filters, quantity tracking from zero through 99, separate CSV exports, and private opt-in trade matching. Security-sensitive account and album-publication actions are emitted as data-minimized structured audit events. Self-registration, invitations, trade requests, and messaging remain on the [GitHub roadmap](https://github.com/descipar/stickerfolio/issues).
 
 The agreed product and architecture decisions are documented in the [roadmap](docs/ROADMAP.md).
 The provider-neutral catalog interchange contract is documented in the [album template format](docs/ALBUM_TEMPLATE_FORMAT.md).
@@ -121,6 +131,14 @@ After an administrator has published an album template, collectors can add that 
 The album view provides separate **Export missing list (CSV)** and **Export duplicates list (CSV)** actions. The missing export contains every sticker with quantity zero. The duplicates export contains only quantities greater than one and includes both the total quantity and the number of spare copies. Exports contain only the signed-in collector's own collection data.
 
 Every user can change their own login address from **Account** after confirming the current password. Administrators can also correct another user's address from **Users**. A successful change signs the affected user out on all devices; the next login uses the normalized new address.
+
+## Using trade matching
+
+Trade matching is disabled for every new collector. To participate, open **Account** and enable **Appear in trade matching**. The change takes effect immediately: disabling it removes the collector from other users' results and also hides their own results.
+
+Open a personal album and choose **Find trade partners**. Matches are based on missing stickers (quantity zero) and duplicates (quantity greater than one) in active collections of the same album. A two-way match means both collectors can offer at least one needed sticker; a one-way match helps only one side. Use the controls to filter by team or album section, show only one-way or two-way matches, and sort by compatibility, offered stickers, wanted stickers, or collector name.
+
+Only the partner's display name and relevant sticker details are returned. When album revisions use different printed codes for the same stable sticker, both codes are shown. The feature does not expose login email addresses, unrelated stickers, or complete foreign holdings, and administrators do not receive blanket access to collector matches.
 
 ## Quality checks
 

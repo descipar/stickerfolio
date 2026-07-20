@@ -162,6 +162,9 @@ export function CollectionView({ collectionId }: { collectionId: string }) {
       </section>
 
       <section className="collection-export" aria-label="Export lists as CSV">
+        <a className="primary-button inline-action" href={`/albums/${collectionId}/trades`}>
+          Find trade partners
+        </a>
         <a className="secondary-button" href={`/api/collections/${collectionId}/export?type=missing`} download>
           Export missing list (CSV)
         </a>

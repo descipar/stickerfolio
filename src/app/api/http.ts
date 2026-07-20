@@ -4,6 +4,7 @@ import { AdminError } from "@/modules/admin";
 import { CatalogError } from "@/modules/catalog";
 import { CollectionError } from "@/modules/collections";
 import { AuthenticationError, EmailChangeError } from "@/modules/identity";
+import { TradingError } from "@/modules/trading";
 
 export function apiError(error: unknown): NextResponse {
   if (error instanceof AdminError) {
@@ -29,6 +30,12 @@ export function apiError(error: unknown): NextResponse {
   }
   if (error instanceof CatalogError) {
     return NextResponse.json({ error: error.message }, { status: error.status });
+  }
+  if (error instanceof TradingError) {
+    return NextResponse.json(
+      { error: error.status === 404 ? "Collection not found." : "Trade matches could not be loaded." },
+      { status: error.status },
+    );
   }
   return NextResponse.json({ error: "The request could not be completed." }, { status: 500 });
 }
