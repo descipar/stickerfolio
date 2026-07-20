@@ -3,6 +3,7 @@ import { z } from "zod";
 
 import { readLimitedJson } from "@/infrastructure/http";
 import {
+  deleteManagedUser,
   resetManagedUserPassword,
   setManagedUserEmail,
   setManagedUserRole,
@@ -26,6 +27,7 @@ const mutationSchema = z.discriminatedUnion("action", [
     password: z.string().min(minimumPasswordLength).max(maximumPasswordLength),
   }),
 ]);
+const deleteSchema = z.object({ confirmationEmail: loginEmailSchema });
 
 export async function PATCH(
   request: Request,
@@ -49,6 +51,25 @@ export async function PATCH(
       await resetManagedUserPassword(request.headers, userId.data, mutation.data.password);
     }
     return NextResponse.json({ updated: true });
+  } catch (error) {
+    return apiError(error);
+  }
+}
+
+export async function DELETE(
+  request: Request,
+  context: { params: Promise<{ userId: string }> },
+): Promise<NextResponse> {
+  const userId = idSchema.safeParse((await context.params).userId);
+  const requestBody = await readLimitedJson(request);
+  if (requestBody.status === "too-large") return requestBodyTooLarge();
+  const body = deleteSchema.safeParse(requestBody.status === "ok" ? requestBody.value : null);
+  if (!userId.success || !body.success) {
+    return NextResponse.json({ error: "Invalid account deletion." }, { status: 400 });
+  }
+  try {
+    await deleteManagedUser(request.headers, userId.data, body.data.confirmationEmail);
+    return NextResponse.json({ deleted: true });
   } catch (error) {
     return apiError(error);
   }
