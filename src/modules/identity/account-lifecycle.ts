@@ -36,22 +36,32 @@ async function verifyOwnPassword(
 }
 
 /**
- * Guards the roadmap guarantee that at least one administrator always exists
- * (Roadmap 11.4, risk section 18). All administrator rows are locked FOR UPDATE
- * so two concurrent lifecycle changes cannot both slip past the check and leave
- * the installation with no administrator. The restricted bootstrap admin is an
- * ordinary administrator here, so this also prevents removing it while it is the
- * only one, preserving the "never recreate/reset" property.
+ * Guards the roadmap guarantee that at least one administrator who can actually
+ * sign in always exists (Roadmap 11.4, risk section 18). All administrator rows
+ * are locked FOR UPDATE so two concurrent lifecycle changes cannot both slip
+ * past the check and leave the installation without a usable administrator.
+ *
+ * Only ACTIVE administrators count: a suspended administrator cannot sign in and
+ * therefore cannot reactivate anyone. The action is refused when the target is
+ * an administrator and no OTHER administrator with `status = 'active'` would
+ * remain afterwards. This stops the sole active administrator from deleting or
+ * deactivating itself even while a suspended administrator still exists — which
+ * would otherwise leave nobody able to sign in and reactivate that suspended
+ * one. The restricted bootstrap admin is an ordinary administrator here, so this
+ * also preserves the "never recreate/reset" property.
  */
 async function assertNotLastAdministrator(client: PoolClient, userId: string): Promise<void> {
-  const admins = await query<{ id: string }>(
-    `SELECT id FROM "user" WHERE role = 'admin' FOR UPDATE`,
+  const admins = await query<{ id: string; status: string }>(
+    `SELECT id, status FROM "user" WHERE role = 'admin' FOR UPDATE`,
     [],
     client,
   );
-  const adminIds = admins.rows.map((row) => row.id);
-  if (adminIds.includes(userId) && adminIds.length <= 1) {
-    throw new AccountLifecycleError("The last administrator account cannot be removed.", 409);
+  const targetIsAdmin = admins.rows.some((row) => row.id === userId);
+  const otherActiveAdmins = admins.rows.filter(
+    (row) => row.id !== userId && row.status === "active",
+  );
+  if (targetIsAdmin && otherActiveAdmins.length === 0) {
+    throw new AccountLifecycleError("The last active administrator account cannot be removed.", 409);
   }
 }
 
@@ -101,14 +111,19 @@ export async function deactivateOwnAccount(
  * are referenced ON DELETE RESTRICT, which blocks deleting catalog data, not
  * the user's own collection rows.
  *
- * Data export: users should export their collections first (Roadmap 10.3). The
- * CSV export (issue #68) is surfaced as an explicit "export first" step in the
- * UI; deletion is intentionally standalone and never blocks on it.
+ * Data export: users should export their data first (Roadmap 10.3). The account
+ * danger zone surfaces an explicit "export first" step, and the complete,
+ * portable account-data export is tracked in issue #88. The per-collection CSV
+ * export (#68) only produces missing/duplicate lists and is deliberately not a
+ * full export, so it is not treated as one here. Deletion is intentionally
+ * standalone and never blocks on export.
  *
- * NOTE: once invitation-based registration lands, its
- * `invitations.created_by_user_id` / `accepted_by_user_id` references must use
- * ON DELETE SET NULL (or be cleared in this transaction) so deletion keeps
- * cascading cleanly.
+ * NOTE: invitation-based registration is not on this branch (M1, #87). The
+ * agreed data policy is that `invitations.created_by_user_id` becomes NULLABLE
+ * with ON DELETE SET NULL in #87, so deleting an administrator does NOT
+ * cascade-delete their pending invitations and accepted-invitation records
+ * survive. The combined deletion-with-pending/accepted-invitations integration
+ * test will be added once M1 (#87) merges.
  */
 export async function deleteOwnAccount(
   headers: Headers,
