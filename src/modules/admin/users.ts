@@ -318,3 +318,72 @@ export async function setManagedUserRole(
     { role },
   );
 }
+
+/**
+ * Administrator permanently deletes a user account. Irreversible, so it
+ * requires deliberate confirmation: the administrator must type the target's
+ * exact login email, verified server-side after shared normalization.
+ *
+ * Safety properties:
+ *  - Runs as one transaction and relies on the ON DELETE CASCADE foreign keys
+ *    (session, account, collector_profiles -> collections -> holdings,
+ *    trading_preferences) so the target user's whole owned graph is removed,
+ *    no other user's rows are affected, and no foreign key is violated. Shared
+ *    catalog rows are referenced ON DELETE RESTRICT, which blocks deleting
+ *    catalog data, not the user's collection rows.
+ *  - Guards the last administrator: all administrator rows are locked
+ *    FOR UPDATE and, if the target is the only administrator, deletion is
+ *    refused. This preserves the roadmap guarantee that the bootstrap admin is
+ *    never left un-recreatable (Roadmap 11.4 / 18).
+ *  - Administrators delete their own account from account settings, never from
+ *    the management panel, mirroring the existing self-action guards.
+ *
+ * Administrators never gain access to holdings here: no collection or holding
+ * data is read or returned; only the account.deleted audit event (ids only) is
+ * emitted. Users should export their data first (Roadmap 10.3); the CSV export
+ * (issue #68) is surfaced in the UI and deletion never blocks on it.
+ *
+ * NOTE: once invitation-based registration lands, its invitation references
+ * (`created_by_user_id` / `accepted_by_user_id`) must use ON DELETE SET NULL
+ * (or be cleared in this transaction) so this cascade keeps working.
+ */
+export async function deleteManagedUser(
+  headers: Headers,
+  userId: string,
+  confirmationEmail: string,
+  auth?: StickerfolioAuth,
+  pool: Pool = getPool(),
+): Promise<void> {
+  const actor = await requireAdmin(headers, auth, pool);
+  if (actor.userId === userId) {
+    throw new AdminError("Use your account settings to delete your own account.");
+  }
+  await withTransaction(async (client) => {
+    const admins = await query<{ id: string }>(
+      `SELECT id FROM "user" WHERE role = 'admin' FOR UPDATE`,
+      [],
+      client,
+    );
+    const target = await query<{ email: string; role: UserRole }>(
+      `SELECT email, role FROM "user" WHERE id = $1 FOR UPDATE`,
+      [userId],
+      client,
+    );
+    const targetRow = target.rows[0];
+    if (!targetRow) throw new AdminError("User not found.", 404);
+    if (normalizeEmail(confirmationEmail) !== targetRow.email) {
+      throw new AdminError("Type the exact account email to confirm deletion.");
+    }
+    if (targetRow.role === "admin" && admins.rows.length <= 1) {
+      throw new AdminError("The last administrator account cannot be deleted.", 409);
+    }
+    const deletion = await query(`DELETE FROM "user" WHERE id = $1`, [userId], client);
+    if (deletion.rowCount !== 1) throw new AdminError("User not found.", 404);
+  }, pool);
+  writeAuditEvent(
+    "account.deleted",
+    { type: "user", userId: actor.userId },
+    { type: "user", id: userId },
+    { actor: "admin" },
+  );
+}
