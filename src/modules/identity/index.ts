@@ -13,6 +13,11 @@ export {
 } from "./profiles";
 export { changeOwnPassword } from "./change-password";
 export { changeOwnEmail, EmailChangeError } from "./change-email";
+export {
+  AccountLifecycleError,
+  deactivateOwnAccount,
+  deleteOwnAccount,
+} from "./account-lifecycle";
 export { loginEmailSchema, normalizeEmail } from "./email";
 export {
   AuthenticationError,

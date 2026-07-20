@@ -5,6 +5,8 @@ export type AuditAction =
   | "account.password_reset"
   | "account.role_changed"
   | "account.status_changed"
+  | "account.deactivated"
+  | "account.deleted"
   | "album_revision.published"
   | "album_revision.archived"
   | "registration_mode.configured";
