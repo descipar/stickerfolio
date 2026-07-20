@@ -3,7 +3,7 @@ import { NextResponse } from "next/server";
 import { AdminError } from "@/modules/admin";
 import { CatalogError } from "@/modules/catalog";
 import { CollectionError } from "@/modules/collections";
-import { AuthenticationError, EmailChangeError } from "@/modules/identity";
+import { AuthenticationError, EmailChangeError, InvitationError, RegistrationError } from "@/modules/identity";
 import { TradingError } from "@/modules/trading";
 
 export function apiError(error: unknown): NextResponse {
@@ -18,6 +18,12 @@ export function apiError(error: unknown): NextResponse {
       { error: error.status === 401 ? "Authentication required." : "Access denied." },
       { status: error.status },
     );
+  }
+  if (error instanceof RegistrationError) {
+    return NextResponse.json({ error: error.message }, { status: error.status });
+  }
+  if (error instanceof InvitationError) {
+    return NextResponse.json({ error: error.message }, { status: error.status });
   }
   if (error instanceof EmailChangeError) {
     return NextResponse.json({ error: error.message }, { status: error.status });
