@@ -239,7 +239,7 @@ export function AdminUsers({ currentUserId }: { currentUserId: string }) {
                         <p className="muted">
                           Permanently deletes this account and its collections and holdings. This
                           cannot be undone. Ask the user to export their data first; administrators
-                          cannot access another user's holdings. Type the account email to confirm.
+                          cannot access another user&apos;s holdings. Type the account email to confirm.
                         </p>
                         <form key={`delete-${user.email}`} onSubmit={(event) => {
                           event.preventDefault();
