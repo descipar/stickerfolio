@@ -123,6 +123,56 @@ describe("invitation links with expiring single-use tokens", () => {
     expect(users.rows[0]?.count).toBe("1");
   });
 
+  it("keeps invitations when the creating administrator is deleted (ON DELETE SET NULL)", async () => {
+    // A dedicated administrator whose deletion must not silently destroy the
+    // pending invitations they created (agreed cross-PR policy with #86).
+    const tempAdmin = await query<{ id: string }>(
+      `INSERT INTO "user" (name, email, "emailVerified", role, status)
+       VALUES ('Temp Inviter', 'temp-inviter@example.test', true, 'admin', 'active') RETURNING id`,
+      [],
+      pool,
+    );
+    const tempAdminId = tempAdmin.rows[0]!.id;
+    const pending = await createInvitation(
+      { email: "survives-pending@example.test", createdByUserId: tempAdminId },
+      pool,
+    );
+    const toAccept = await createInvitation(
+      { email: "survives-accepted@example.test", createdByUserId: tempAdminId },
+      pool,
+    );
+    const accepted = await acceptInvitation(
+      { token: toAccept.token, password: "Accepted-pass-1!", displayName: "Acc" },
+      pool,
+      mode,
+    );
+
+    await query(`DELETE FROM "user" WHERE id = $1`, [tempAdminId], pool);
+
+    const rows = await query<{
+      id: string;
+      created_by_user_id: string | null;
+      accepted_by_user_id: string | null;
+      accepted_at: Date | null;
+    }>(
+      `SELECT id, created_by_user_id, accepted_by_user_id, accepted_at
+         FROM invitations WHERE id = ANY($1::uuid[])`,
+      [[pending.id, toAccept.id]],
+      pool,
+    );
+    expect(rows.rows).toHaveLength(2);
+    for (const row of rows.rows) expect(row.created_by_user_id).toBeNull();
+
+    const pendingRow = rows.rows.find((row) => row.id === pending.id)!;
+    expect(pendingRow.accepted_at).toBeNull();
+    expect(pendingRow.accepted_by_user_id).toBeNull();
+
+    const acceptedRow = rows.rows.find((row) => row.id === toAccept.id)!;
+    expect(acceptedRow.accepted_at).not.toBeNull();
+    // The acceptor is a different user and stays linked after the creator's deletion.
+    expect(acceptedRow.accepted_by_user_id).toBe(accepted.userId);
+  });
+
   it("is unavailable outside invitation mode", async () => {
     const invitation = await createInvitation({ email: "wrong-mode@example.test", createdByUserId: adminId }, pool);
     await expect(

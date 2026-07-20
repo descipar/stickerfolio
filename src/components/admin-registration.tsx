@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState, type FormEvent } from "react";
+import { useEffect, useState, type FormEvent } from "react";
 
 type RegistrationMode = "closed" | "invitation" | "open";
 
@@ -33,18 +33,32 @@ export function AdminRegistration({
   const [error, setError] = useState("");
   const [pending, setPending] = useState(false);
 
-  const load = useCallback(async () => {
+  async function load() {
     const response = await fetch("/api/admin/invitations", { cache: "no-store" });
     if (!response.ok) {
       setError("Invitations could not be loaded.");
       return;
     }
     setInvitations((await response.json() as { invitations: Invitation[] }).invitations);
-  }, []);
+  }
 
   useEffect(() => {
-    if (invitationsEnabled) void load();
-  }, [invitationsEnabled, load]);
+    if (!invitationsEnabled) return;
+    const controller = new AbortController();
+    void fetch("/api/admin/invitations", { cache: "no-store", signal: controller.signal })
+      .then(async (response) => {
+        if (!response.ok) {
+          setError("Invitations could not be loaded.");
+          return;
+        }
+        const data = (await response.json()) as { invitations: Invitation[] };
+        setInvitations(data.invitations);
+      })
+      .catch(() => {
+        // Ignore aborts from unmount/re-run; other failures surface via reload.
+      });
+    return () => controller.abort();
+  }, [invitationsEnabled]);
 
   async function create(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();

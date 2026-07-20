@@ -11,6 +11,7 @@ export default async function CollectionPage({ params }: { params: Promise<{ col
   if (!identity) redirect("/login");
   if (identity.mustChangePassword) redirect("/password/change");
   if (!identity.collector) redirect(identity.role === "admin" ? "/admin/users" : "/");
+  if (!identity.collector.onboardingCompleted) redirect("/onboarding");
   const { collectionId } = await params;
 
   return (

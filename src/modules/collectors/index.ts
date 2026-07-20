@@ -2,4 +2,4 @@ export {
   requireCollectorContext,
   type CollectorContext,
 } from "./session";
-export { updateCollectorDisplayName } from "./repository";
+export { markCollectorOnboardingComplete, updateCollectorDisplayName } from "./repository";

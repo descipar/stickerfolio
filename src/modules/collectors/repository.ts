@@ -17,3 +17,20 @@ export async function updateCollectorDisplayName(
     executor,
   );
 }
+
+/**
+ * Marks the collector's onboarding as complete. This is server-authoritative and
+ * idempotent: the first completion timestamp is preserved on repeat calls, so a
+ * later re-submission never rewrites when onboarding was actually finished. A
+ * deliberate zero-album completion still records the timestamp.
+ */
+export async function markCollectorOnboardingComplete(
+  collectorId: string,
+  executor?: QueryExecutor,
+): Promise<void> {
+  await query(
+    "UPDATE collector_profiles SET onboarding_completed_at = COALESCE(onboarding_completed_at, now()), updated_at = now() WHERE id = $1",
+    [collectorId],
+    executor,
+  );
+}

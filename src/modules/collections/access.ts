@@ -1,8 +1,12 @@
 import type { Pool } from "pg";
 
-import { getPool, withTransaction } from "@/infrastructure/database";
+import { DatabaseError, getPool, withTransaction } from "@/infrastructure/database";
 import { listPublishedAlbums, type PublishedAlbumSummary } from "@/modules/catalog";
-import { requireCollectorContext, updateCollectorDisplayName } from "@/modules/collectors";
+import {
+  markCollectorOnboardingComplete,
+  requireCollectorContext,
+  updateCollectorDisplayName,
+} from "@/modules/collectors";
 
 import { exportFileName, serializeCollectionExport } from "./csv";
 import {
@@ -69,15 +73,29 @@ export async function completeOnboarding(
     throw new CollectionError("A display name is required.");
   }
   const albumIds = [...new Set(input.albumIds)];
-  return withTransaction(async (client) => {
-    await updateCollectorDisplayName(identity.collector.id, displayName, client);
-    const collections: { id: string; albumId: string }[] = [];
-    for (const albumId of albumIds) {
-      const created = await createCollection(identity.collector.id, albumId, client);
-      collections.push({ id: created.id, albumId });
+  try {
+    return await withTransaction(async (client) => {
+      await updateCollectorDisplayName(identity.collector.id, displayName, client);
+      const collections: { id: string; albumId: string }[] = [];
+      for (const albumId of albumIds) {
+        const created = await createCollection(identity.collector.id, albumId, client);
+        collections.push({ id: created.id, albumId });
+      }
+      // Server-authoritative onboarding-completion flag, set inside the same
+      // transaction so a completion (including a deliberate zero-album one) is
+      // atomic with the created collections. A repeated or manipulated
+      // submission that re-selects an already-owned album trips the
+      // collections_one_active_album unique constraint; translate that into a
+      // clean domain conflict instead of leaking a 500.
+      await markCollectorOnboardingComplete(identity.collector.id, client);
+      return { collections };
+    }, pool);
+  } catch (error) {
+    if (error instanceof DatabaseError && error.code === "23505") {
+      throw new CollectionError("You already have a collection for one of the selected albums.", 409);
     }
-    return { collections };
-  }, pool);
+    throw error;
+  }
 }
 
 export async function addOwnCollection(

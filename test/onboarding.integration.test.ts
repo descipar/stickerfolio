@@ -3,7 +3,7 @@ import { afterAll, beforeAll, describe, expect, inject, it } from "vitest";
 import { createPool, query } from "@/infrastructure/database";
 import { seedAlbumTemplate } from "@/modules/catalog";
 import { completeOnboarding, getCollectionsOverview } from "@/modules/collections";
-import { createAuth, hashPassword, registerOpenAccount } from "@/modules/identity";
+import { createAuth, hashPassword, registerOpenAccount, resolveIdentity } from "@/modules/identity";
 
 import { createTestEnvironment } from "./create-test-environment";
 
@@ -53,6 +53,9 @@ describe("onboarding with collector profile and album selection", () => {
   it("offers only current published revisions and creates no accidental collection", async () => {
     const result = await completeOnboarding(collectorHeaders, { displayName: "Collector", albumIds: [] }, auth, pool);
     expect(result.collections).toHaveLength(0);
+    // A deliberate zero-album completion still marks onboarding complete.
+    const identity = await resolveIdentity(collectorHeaders, auth, pool);
+    expect(identity?.collector?.onboardingCompleted).toBe(true);
     const overview = await getCollectionsOverview(collectorHeaders, auth, pool);
     expect(overview.collections).toHaveLength(0);
     const availableIds = overview.availableAlbums.map((album) => album.id).sort();
@@ -76,6 +79,44 @@ describe("onboarding with collector profile and album selection", () => {
       pool,
     );
     expect(profile.rows[0]?.display_name).toBe("Renamed Collector");
+  });
+
+  it("keeps routing a returning collector to onboarding until completion is persisted", async () => {
+    await registerOpenAccount(
+      { email: "returning@example.test", password: "Returning-1!", displayName: "Returning" },
+      pool,
+      "open",
+    );
+    const beforeHeaders = await signIn("returning@example.test", "Returning-1!");
+    const before = await resolveIdentity(beforeHeaders, auth, pool);
+    expect(before?.collector?.onboardingCompleted).toBe(false);
+
+    await completeOnboarding(beforeHeaders, { displayName: "Returning", albumIds: [] }, auth, pool);
+
+    // A fresh sign-in (new session) still observes the persisted completion, so
+    // a later sign-in can never bypass onboarding until it is actually done.
+    const afterHeaders = await signIn("returning@example.test", "Returning-1!");
+    const after = await resolveIdentity(afterHeaders, auth, pool);
+    expect(after?.collector?.onboardingCompleted).toBe(true);
+  });
+
+  it("rejects a resubmitted onboarding that re-selects an already-owned album with a clean 409", async () => {
+    await registerOpenAccount(
+      { email: "resubmit@example.test", password: "Resubmit-1!", displayName: "Resubmit" },
+      pool,
+      "open",
+    );
+    const headers = await signIn("resubmit@example.test", "Resubmit-1!");
+    await completeOnboarding(headers, { displayName: "Resubmit", albumIds: [publishedOne.album] }, auth, pool);
+
+    // Do not rely on the UI's available-album list: submit the already-owned
+    // album id directly. The unique constraint must surface as a domain 409.
+    await expect(
+      completeOnboarding(headers, { displayName: "Resubmit", albumIds: [publishedOne.album] }, auth, pool),
+    ).rejects.toMatchObject({ status: 409 });
+
+    const overview = await getCollectionsOverview(headers, auth, pool);
+    expect(overview.collections).toHaveLength(1);
   });
 
   it("never forces an administrator without a collector profile into collector onboarding", async () => {

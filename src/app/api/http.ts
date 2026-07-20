@@ -30,7 +30,14 @@ export function apiError(error: unknown): NextResponse {
   }
   if (error instanceof CollectionError) {
     return NextResponse.json(
-      { error: error.status === 404 ? "Collection not found." : "The collection could not be updated." },
+      {
+        error:
+          error.status === 404
+            ? "Collection not found."
+            : error.status === 409
+              ? error.message
+              : "The collection could not be updated.",
+      },
       { status: error.status },
     );
   }

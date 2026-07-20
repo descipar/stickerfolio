@@ -11,6 +11,9 @@ export default async function OnboardingPage() {
   // An administrator without a collector profile is never forced into collector
   // onboarding; send them to the areas they actually manage.
   if (!identity.collector) redirect(identity.role === "admin" ? "/admin/albums" : "/albums");
+  // Onboarding is a one-time step; a collector who already completed it is sent
+  // to their albums rather than shown the flow again.
+  if (identity.collector.onboardingCompleted) redirect("/albums");
 
   return (
     <main className="page-shell">

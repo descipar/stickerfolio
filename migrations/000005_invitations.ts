@@ -9,7 +9,7 @@ export function up(pgm: MigrationBuilder): void {
       token_hash text NOT NULL UNIQUE,
       email text NOT NULL,
       display_name text,
-      created_by_user_id uuid NOT NULL REFERENCES "user"(id) ON DELETE CASCADE,
+      created_by_user_id uuid REFERENCES "user"(id) ON DELETE SET NULL,
       accepted_by_user_id uuid REFERENCES "user"(id) ON DELETE SET NULL,
       expires_at timestamptz NOT NULL,
       accepted_at timestamptz,
