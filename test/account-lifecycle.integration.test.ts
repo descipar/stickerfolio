@@ -172,6 +172,27 @@ describe("account lifecycle: suspension, deactivation, and deletion", () => {
     aliceHeaders = reactivated.headers;
   });
 
+  it("treats the sole active administrator as the last one even when a suspended administrator exists", async () => {
+    // Suspend the second administrator so only the bootstrap admin can sign in.
+    await setManagedUserStatus(adminHeaders, adminBId, "suspended", auth, pool);
+
+    // The bootstrap admin is now the only ACTIVE administrator; it must not be
+    // able to delete or deactivate itself even though a suspended admin exists,
+    // otherwise nobody could sign in to reactivate that suspended admin.
+    await expect(deleteOwnAccount(adminHeaders, adminPassword, bootstrapAdminEmail, auth, pool))
+      .rejects.toMatchObject({ status: 409 });
+    await expect(deactivateOwnAccount(adminHeaders, adminPassword, auth, pool))
+      .rejects.toMatchObject({ status: 409 });
+    // The admin-panel delete of the sole active admin is refused for the same
+    // reason (here it also hits the self-delete guard, which is fine).
+    await expect(deleteManagedUser(adminHeaders, adminId, bootstrapAdminEmail, auth, pool))
+      .rejects.toBeInstanceOf(AdminError);
+    expect((await graphCounts(adminId)).users).toBe(1);
+
+    // Restore the second administrator to active for the remaining tests.
+    await setManagedUserStatus(adminHeaders, adminBId, "active", auth, pool);
+  });
+
   it("deletes only the target user's graph, keeping every other user intact", async () => {
     const bobBefore = await graphCounts(bobId);
     expect(bobBefore.holdings).toBeGreaterThan(0);

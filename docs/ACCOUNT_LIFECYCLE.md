@@ -58,29 +58,47 @@ user
 - **Deliberate confirmation.** The caller must supply the exact login email
   (and, for the self-service path, the current password). Both are verified
   server-side; hiding a UI control is never the guard.
-- **Last-administrator guard.** All administrator rows are locked `FOR UPDATE`
-  and deletion (or deactivation) is refused when the target is the only
-  administrator. This preserves the guarantee that the bootstrap administrator
-  is never left un-recreatable (Roadmap 11.4). Administrators delete their own
-  account from account settings, not from the management panel.
+- **Last active-administrator guard.** All administrator rows are locked
+  `FOR UPDATE` and deletion (or deactivation) is refused when the target is an
+  administrator and no **other** administrator with `status = 'active'` would
+  remain. Only active administrators count: a suspended administrator cannot
+  sign in, so it cannot reactivate anyone. This means the sole active
+  administrator cannot delete or deactivate itself even when a suspended
+  administrator still exists — otherwise nobody could sign in to reactivate that
+  suspended administrator. This preserves the guarantee that the bootstrap
+  administrator is never left un-recreatable (Roadmap 11.4). Administrators
+  delete their own account from account settings, not from the management panel.
 
 ### Invitations (forward note)
 
-Invitation-based registration is not yet on `main`. When it lands, its
-`invitations.created_by_user_id` and `accepted_by_user_id` references must use
-`ON DELETE SET NULL` (or be cleared inside the deletion transaction) so account
-deletion keeps cascading cleanly and an accepted invitation record survives the
-removal of its creator. This is called out in code comments next to the delete
-use cases.
+Invitation-based registration is not on this branch (milestone M1 is not yet
+merged), so the `invitations` table is intentionally absent here and no
+invitation code is referenced. The agreed data policy, aligned with PR #87
+(M1): `invitations.created_by_user_id` becomes NULLABLE with
+`ON DELETE SET NULL`, so deleting an administrator does **not** cascade-delete
+their pending invitations, and accepted-invitation records survive the removal
+of their creator. This is called out in code comments next to the delete use
+cases. The combined deletion-with-pending/accepted-invitations integration test
+will be added once M1 (#87) merges.
 
 ## Data export before deletion
 
-Users should export their collections before deleting. The account page links
-to the albums overview, where the per-collection CSV export (issue #68) is
-available. Deletion is standalone and never blocks on export. Administrators
-cannot export another user's data because administrators have no access to
-other users' holdings (Roadmap 8.2 / 20.4); the admin delete dialog instead
-asks the administrator to have the user export first.
+Acceptance interpretation (revised in review of PR #86): the account-deletion
+flow **surfaces an export-first step**, and a **complete, portable
+account-data export is tracked in issue #88**. Deletion is standalone and never
+blocks on export.
+
+The per-collection CSV export (issue #68) only produces missing and duplicate
+lists; it deliberately omits owned single copies, profile/account fields, and a
+single all-collections file, so it is **not** a full export and is not treated
+as the data-preservation export. Issue #88 ("Complete self-service account data
+export") tracks the complete portable export that will become the real
+"export first" target and supersedes the export-before-deletion acceptance
+point of #35.
+
+Administrators cannot export another user's data because administrators have no
+access to other users' holdings (Roadmap 8.2 / 20.4); the admin delete dialog
+instead asks the administrator to have the user export first.
 
 ## Audit and data minimization
 
