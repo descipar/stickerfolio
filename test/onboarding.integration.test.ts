@@ -129,8 +129,8 @@ describe("onboarding with collector profile and album selection", () => {
     const adminId = admin.rows[0]!.id;
     await query(
       `INSERT INTO account ("accountId", "providerId", "userId", password, "createdAt", "updatedAt")
-       VALUES ($1, 'credential', $1, $2, now(), now())`,
-      [adminId, await hashPassword("Admin-pass-1!")],
+       VALUES ($1, 'credential', $2, $3, now(), now())`,
+      [adminId, adminId, await hashPassword("Admin-pass-1!")],
       pool,
     );
     const adminHeaders = await signIn("admin-onboard@example.test", "Admin-pass-1!");
