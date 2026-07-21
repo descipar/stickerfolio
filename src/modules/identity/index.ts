@@ -18,6 +18,11 @@ export {
   deactivateOwnAccount,
   deleteOwnAccount,
 } from "./account-lifecycle";
+export {
+  lockAdministratorsForMutation,
+  type AdministratorGuardErrors,
+  type AdministratorLockOptions,
+} from "./administrator-lock";
 export { loginEmailSchema, normalizeEmail } from "./email";
 export {
   AuthenticationError,
