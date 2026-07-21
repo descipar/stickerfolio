@@ -87,6 +87,25 @@ export function AdminUsers({ currentUserId }: { currentUserId: string }) {
     setPending(false);
   }
 
+  async function removeUser(userId: string, confirmationEmail: string) {
+    setPending(true);
+    setError("");
+    setMessage("");
+    const response = await fetch(`/api/admin/users/${userId}`, {
+      method: "DELETE",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ confirmationEmail }),
+    });
+    if (!response.ok) {
+      const data = await response.json().catch(() => null) as { error?: string } | null;
+      setError(data?.error ?? "The account could not be deleted.");
+    } else {
+      setMessage("Account permanently deleted.");
+      await load();
+    }
+    setPending(false);
+  }
+
   async function changeOwnEmail(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setPending(true);
@@ -213,6 +232,33 @@ export function AdminUsers({ currentUserId }: { currentUserId: string }) {
                             />
                           </label>
                           <button className="primary-button" type="submit" disabled={pending}>Set email</button>
+                        </form>
+                      </details>
+                      <details className="password-reset">
+                        <summary>Delete account</summary>
+                        <p className="muted">
+                          Permanently deletes this account and its collections and holdings. This
+                          cannot be undone. Ask the user to export their data first; administrators
+                          cannot access another user&apos;s holdings. Type the account email to confirm.
+                        </p>
+                        <form key={`delete-${user.email}`} onSubmit={(event) => {
+                          event.preventDefault();
+                          const form = event.currentTarget;
+                          const confirmationEmail = String(new FormData(form).get("confirmationEmail") ?? "");
+                          void removeUser(user.id, confirmationEmail).then(() => form.reset());
+                        }}>
+                          <label>
+                            <span className="visually-hidden">Confirm the login email of {user.email}</span>
+                            <input
+                              name="confirmationEmail"
+                              type="email"
+                              maxLength={254}
+                              required
+                              autoComplete="off"
+                              placeholder="Confirm account email"
+                            />
+                          </label>
+                          <button className="primary-button danger" type="submit" disabled={pending}>Delete account</button>
                         </form>
                       </details>
                     </>

@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 
+import { AccountLifecycleError } from "@/modules/identity";
 import { AdminError } from "@/modules/admin";
 import { CatalogError } from "@/modules/catalog";
 import { CollectionError } from "@/modules/collections";
@@ -27,6 +28,12 @@ export function apiError(error: unknown): NextResponse {
   }
   if (error instanceof EmailChangeError) {
     return NextResponse.json({ error: error.message }, { status: error.status });
+  }
+  if (error instanceof AccountLifecycleError) {
+    return NextResponse.json(
+      { error: error.status === 401 ? "Authentication required." : error.message },
+      { status: error.status },
+    );
   }
   if (error instanceof CollectionError) {
     return NextResponse.json(

@@ -318,3 +318,85 @@ export async function setManagedUserRole(
     { role },
   );
 }
+
+/**
+ * Administrator permanently deletes a user account. Irreversible, so it
+ * requires deliberate confirmation: the administrator must type the target's
+ * exact login email, verified server-side after shared normalization.
+ *
+ * Safety properties:
+ *  - Runs as one transaction and relies on the ON DELETE CASCADE foreign keys
+ *    (session, account, collector_profiles -> collections -> holdings,
+ *    trading_preferences) so the target user's whole owned graph is removed,
+ *    no other user's rows are affected, and no foreign key is violated. Shared
+ *    catalog rows are referenced ON DELETE RESTRICT, which blocks deleting
+ *    catalog data, not the user's collection rows.
+ *  - Guards the last active administrator: all administrator rows are locked
+ *    FOR UPDATE and, if the target is an administrator and no OTHER
+ *    administrator with status = 'active' would remain, deletion is refused.
+ *    Only active administrators count because a suspended administrator cannot
+ *    sign in to reactivate anyone, so the sole active administrator cannot be
+ *    deleted even when a suspended administrator still exists. This preserves
+ *    the roadmap guarantee that the bootstrap admin is never left
+ *    un-recreatable (Roadmap 11.4 / 18).
+ *  - Administrators delete their own account from account settings, never from
+ *    the management panel, mirroring the existing self-action guards.
+ *
+ * Administrators never gain access to holdings here: no collection or holding
+ * data is read or returned; only the account.deleted audit event (ids only) is
+ * emitted. Users should export their data first (Roadmap 10.3); the account
+ * danger zone surfaces an "export first" step and the complete, portable
+ * account-data export is tracked in issue #88 (the per-collection CSV export in
+ * #68 only covers missing/duplicate lists and is not a full export). Deletion
+ * never blocks on export.
+ *
+ * NOTE: invitation-based registration is not on this branch (M1, #87). The
+ * agreed data policy is that `invitations.created_by_user_id` becomes NULLABLE
+ * with ON DELETE SET NULL in #87, so deleting an administrator does NOT
+ * cascade-delete their pending invitations and accepted-invitation records
+ * survive. The combined deletion-with-pending/accepted-invitations integration
+ * test will be added once M1 (#87) merges.
+ */
+export async function deleteManagedUser(
+  headers: Headers,
+  userId: string,
+  confirmationEmail: string,
+  auth?: StickerfolioAuth,
+  pool: Pool = getPool(),
+): Promise<void> {
+  const actor = await requireAdmin(headers, auth, pool);
+  if (actor.userId === userId) {
+    throw new AdminError("Use your account settings to delete your own account.");
+  }
+  await withTransaction(async (client) => {
+    const admins = await query<{ id: string; status: UserStatus }>(
+      `SELECT id, status FROM "user" WHERE role = 'admin' FOR UPDATE`,
+      [],
+      client,
+    );
+    const target = await query<{ email: string; role: UserRole }>(
+      `SELECT email, role FROM "user" WHERE id = $1 FOR UPDATE`,
+      [userId],
+      client,
+    );
+    const targetRow = target.rows[0];
+    if (!targetRow) throw new AdminError("User not found.", 404);
+    if (normalizeEmail(confirmationEmail) !== targetRow.email) {
+      throw new AdminError("Type the exact account email to confirm deletion.");
+    }
+    const otherActiveAdmins = admins.rows.filter(
+      (row) => row.id !== userId && row.status === "active",
+    );
+    if (targetRow.role === "admin" && otherActiveAdmins.length === 0) {
+      throw new AdminError("The last active administrator account cannot be deleted.", 409);
+    }
+    const deletion = await query(`DELETE FROM "user" WHERE id = $1`, [userId], client);
+    if (deletion.rowCount !== 1) throw new AdminError("User not found.", 404);
+  }, pool);
+  writeAuditEvent(
+    "account.deleted",
+    { type: "user", userId: actor.userId },
+    { type: "user", id: userId },
+    { actor: "admin" },
+  );
+}

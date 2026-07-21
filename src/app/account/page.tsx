@@ -1,6 +1,7 @@
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 
+import { AccountDangerZone } from "@/components/account-danger-zone";
 import { AppNavigation } from "@/components/app-navigation";
 import { EmailChangeForm } from "@/components/email-change-form";
 import { TradingPreferenceForm } from "@/components/trading-preference-form";
@@ -38,6 +39,15 @@ export default async function AccountPage() {
           <TradingPreferenceForm initialVisible={tradingVisible} />
         </section>
       ) : null}
+      <section className="card account-section" aria-labelledby="account-danger-title">
+        <p className="eyebrow">Danger zone</p>
+        <h2 id="account-danger-title">Deactivate or delete account</h2>
+        <p className="muted">
+          Deactivation is reversible by an administrator. Deletion is permanent and removes your
+          collections and holdings.
+        </p>
+        <AccountDangerZone />
+      </section>
     </main>
   );
 }
