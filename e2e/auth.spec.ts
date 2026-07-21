@@ -18,7 +18,9 @@ test.describe("sign in", () => {
     await page.getByLabel("Password").fill("definitely-wrong-password");
     await page.getByRole("button", { name: "Sign in" }).click();
 
-    await expect(page.getByRole("alert")).toContainText("incorrect");
+    // Assert the form's own error (scoped by text, since the Next.js route
+    // announcer also carries role="alert").
+    await expect(page.getByText("Email or password is incorrect.")).toBeVisible();
     // Still on the login screen after a failed attempt.
     await expect(page).toHaveURL(/\/login$/);
   });
@@ -39,10 +41,9 @@ test.describe("sign in", () => {
     await page.getByLabel("Confirm new password").fill("changed-admin-pass");
     await page.getByRole("button", { name: "Change password" }).click();
 
-    // After the change the account is no longer stuck on the password screen or
-    // bounced back to login.
-    await page.waitForURL((url) => !/\/(password\/change|login)$/.test(url.pathname));
-    expect(page.url()).not.toContain("/password/change");
-    expect(page.url()).not.toContain("/login");
+    // Changing the temporary password clears the session, so the admin is
+    // returned to the sign-in screen to authenticate with the new password.
+    await page.waitForURL(/\/login$/);
+    await expect(page.getByRole("heading", { name: "Welcome to Stickerfolio" })).toBeVisible();
   });
 });
