@@ -1,132 +1,188 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { usePathname, useRouter } from "next/navigation";
+import { useId, useState, useTransition } from "react";
 
-interface TradeSection { id: string; code: string; name: string }
-interface TradeSticker {
-  code: string;
-  partnerCode: string;
-  label: string;
-  section: TradeSection;
-  spareCount: number;
-}
-interface TradeMatch {
-  displayName: string;
-  kind: "one-way" | "two-way";
-  offersToYou: TradeSticker[];
-  needsFromYou: TradeSticker[];
-  offeredCount: number;
-  wantedCount: number;
-}
-interface TradeResponse {
-  collection: { id: string; albumTitle: string };
-  enabled: boolean;
-  sections: TradeSection[];
-  matches: TradeMatch[];
-  total: number;
-  limit: number;
-  offset: number;
+import type {
+  TradeDirection,
+  TradeMatch,
+  TradeMatchResult,
+  TradeSort,
+  TradeSticker,
+} from "@/modules/trading";
+
+import { buildTradeQuery, describeMatch, formatRange, pageCount } from "./trade-summary";
+
+interface TradeFilters {
+  direction: TradeDirection;
+  section: string;
+  sort: TradeSort;
 }
 
-function StickerList({ title, stickers }: { title: string; stickers: TradeSticker[] }) {
+const STICKER_PREVIEW = 8;
+
+function StickerGroup({ title, stickers }: { title: string; stickers: TradeSticker[] }) {
+  const [showAll, setShowAll] = useState(false);
+  const visible = showAll ? stickers : stickers.slice(0, STICKER_PREVIEW);
+
   return (
     <div className="trade-sticker-group">
-      <h3>{title} <span className="count-badge">{stickers.length}</span></h3>
-      {stickers.length === 0 ? <p className="muted">No matching stickers in this direction.</p> : (
-        <ul className="trade-sticker-list">
-          {stickers.map((sticker) => (
-            <li key={`${sticker.code}-${sticker.partnerCode}`}>
-              <span><strong>{sticker.code}</strong><small>{sticker.section.name}</small></span>
-              {sticker.partnerCode !== sticker.code ? <span className="partner-code">Their code: {sticker.partnerCode}</span> : null}
-              <span className="spare-count">{sticker.spareCount} spare</span>
-            </li>
-          ))}
-        </ul>
+      <h3>
+        {title} <span className="count-badge">{stickers.length}</span>
+      </h3>
+      {stickers.length === 0 ? (
+        <p className="muted">No stickers in this direction.</p>
+      ) : (
+        <>
+          <ul className="trade-sticker-list">
+            {visible.map((sticker) => (
+              <li key={`${sticker.code}-${sticker.partnerCode}`}>
+                <span>
+                  <strong>{sticker.code}</strong>
+                  <small>{sticker.section.code} · {sticker.section.name}</small>
+                </span>
+                {sticker.partnerCode !== sticker.code ? (
+                  <span className="partner-code">Their code: {sticker.partnerCode}</span>
+                ) : null}
+                <span className="spare-count">{sticker.spareCount} spare</span>
+              </li>
+            ))}
+          </ul>
+          {stickers.length > STICKER_PREVIEW ? (
+            <button
+              type="button"
+              className="text-button"
+              aria-expanded={showAll}
+              onClick={() => setShowAll((current) => !current)}
+            >
+              {showAll ? "Show fewer" : `Show all ${stickers.length}`}
+            </button>
+          ) : null}
+        </>
       )}
     </div>
   );
 }
 
-export function TradeMatches({ collectionId }: { collectionId: string }) {
-  const [direction, setDirection] = useState("all");
-  const [section, setSection] = useState("");
-  const [sort, setSort] = useState("compatibility");
-  const [offset, setOffset] = useState(0);
-  const [data, setData] = useState<TradeResponse | null>(null);
-  const [error, setError] = useState("");
-  const limit = 20;
-
-  const query = useMemo(() => new URLSearchParams({
-    direction,
-    section,
-    sort,
-    limit: String(limit),
-    offset: String(offset),
-  }).toString(), [direction, offset, section, sort]);
-
-  useEffect(() => {
-    let active = true;
-    void fetch(`/api/collections/${collectionId}/trades?${query}`, { cache: "no-store" })
-      .then(async (response) => {
-        if (!active) return;
-        if (!response.ok) {
-          setData(null);
-          setError(response.status === 404 ? "Album not found." : "Trade matches could not be loaded.");
-          return;
-        }
-        setError("");
-        setData(await response.json() as TradeResponse);
-      })
-      .catch(() => {
-        if (!active) return;
-        setData(null);
-        setError("Trade matches could not be loaded.");
-      });
-    return () => { active = false; };
-  }, [collectionId, query]);
-
-  function changeFilter(setter: (value: string) => void, value: string) {
-    setter(value);
-    setOffset(0);
-  }
-
-  if (!data && !error) return <p className="state-message" role="status">Finding trade partners…</p>;
-  if (error) return <p className="state-message error" role="alert">{error}</p>;
-  if (!data) return null;
+function PartnerCard({ match, index }: { match: TradeMatch; index: number }) {
+  const [open, setOpen] = useState(false);
+  const detailsId = useId();
 
   return (
-    <div className="trade-view content-stack">
+    <article className="card trade-match-card">
+      <button
+        type="button"
+        className="trade-toggle"
+        aria-expanded={open}
+        aria-controls={detailsId}
+        aria-label={`${match.displayName}: ${describeMatch(match)}`}
+        onClick={() => setOpen((current) => !current)}
+      >
+        <span className="trade-toggle-copy">
+          <span className={`status-badge ${match.kind === "two-way" ? "two-way" : "one-way"}`}>
+            {match.kind === "two-way" ? "Two-way" : "One-way"}
+          </span>
+          <strong>{match.displayName}</strong>
+        </span>
+        <span className="trade-toggle-counts">
+          <span className="count-badge" title="Stickers you could receive">↓ {match.offeredCount} receive</span>
+          <span className="count-badge" title="Stickers you could give">↑ {match.wantedCount} give</span>
+          <span className="trade-caret" aria-hidden="true">{open ? "▲" : "▼"}</span>
+        </span>
+      </button>
+      {open ? (
+        <div className="trade-details" id={detailsId}>
+          <StickerGroup title="They can offer you" stickers={match.offersToYou} />
+          <StickerGroup title="You can offer them" stickers={match.needsFromYou} />
+        </div>
+      ) : (
+        <p className="muted trade-hint" aria-hidden="true">Tap to see the {match.offeredCount + match.wantedCount} matching stickers.</p>
+      )}
+      <span className="visually-hidden">Partner {index + 1}</span>
+    </article>
+  );
+}
+
+export function TradeMatches({
+  result,
+  filters,
+  page,
+  pageSize,
+}: {
+  result: TradeMatchResult;
+  filters: TradeFilters;
+  page: number;
+  pageSize: number;
+}) {
+  const router = useRouter();
+  const pathname = usePathname();
+  const [isPending, startTransition] = useTransition();
+
+  function apply(next: TradeFilters, nextPage: number) {
+    const query = buildTradeQuery(next, nextPage);
+    startTransition(() => {
+      router.push(query ? `${pathname}?${query}` : pathname, { scroll: false });
+    });
+  }
+
+  function changeFilter(patch: Partial<TradeFilters>) {
+    apply({ ...filters, ...patch }, 1);
+  }
+
+  const totalPages = pageCount(result.total, pageSize);
+
+  return (
+    <div className="trade-view content-stack" aria-busy={isPending}>
       <section className="overview-intro">
         <p className="eyebrow">Trading</p>
-        <h1 className="overview-title">Trade matches</h1>
-        <p className="overview-subtitle">{data.collection.albumTitle} · only relevant stickers from opted-in collectors are shown.</p>
+        <h1 className="overview-title">Trade partners</h1>
+        <p className="overview-subtitle">
+          {result.collection.albumTitle} · only opted-in collectors and the stickers relevant to a possible
+          trade are shown. This view never changes your collection.
+        </p>
       </section>
 
-      {!data.enabled ? (
+      {!result.enabled ? (
         <section className="card empty-state">
           <h2>Trading is private</h2>
-          <p className="muted">Enable trade matching in your account before viewing or appearing in matches.</p>
+          <p className="muted">
+            Opt in to trade matching in your account before you can see partners or appear in their matches.
+          </p>
           <Link className="primary-button inline-action" href="/account">Open trading preference</Link>
         </section>
       ) : (
         <>
-          <section className="trade-filters card" aria-label="Filter and sort trade matches">
+          <section className="trade-filters card" aria-label="Filter and sort trade partners">
             <label>Match type
-              <select value={direction} onChange={(event) => changeFilter(setDirection, event.target.value)}>
+              <select
+                value={filters.direction}
+                disabled={isPending}
+                onChange={(event) => changeFilter({ direction: event.target.value as TradeDirection })}
+              >
                 <option value="all">All matches</option>
                 <option value="two-way">Two-way matches</option>
                 <option value="one-way">One-way matches</option>
               </select>
             </label>
             <label>Team or section
-              <select value={section} onChange={(event) => changeFilter(setSection, event.target.value)}>
+              <select
+                value={filters.section}
+                disabled={isPending}
+                onChange={(event) => changeFilter({ section: event.target.value })}
+              >
                 <option value="">All sections</option>
-                {data.sections.map((item) => <option key={item.id} value={item.id}>{item.code} · {item.name}</option>)}
+                {result.sections.map((item) => (
+                  <option key={item.id} value={item.id}>{item.code} · {item.name}</option>
+                ))}
               </select>
             </label>
             <label>Sort by
-              <select value={sort} onChange={(event) => changeFilter(setSort, event.target.value)}>
+              <select
+                value={filters.sort}
+                disabled={isPending}
+                onChange={(event) => changeFilter({ sort: event.target.value as TradeSort })}
+              >
                 <option value="compatibility">Best compatibility</option>
                 <option value="offered">Most offered to you</option>
                 <option value="wanted">Most wanted from you</option>
@@ -136,28 +192,49 @@ export function TradeMatches({ collectionId }: { collectionId: string }) {
           </section>
 
           <div className="results-heading">
-            <div><p className="eyebrow">Partners</p><h2>{data.total} matches</h2></div>
-            <span>{data.total === 0 ? "0" : `${data.offset + 1}-${Math.min(data.offset + data.matches.length, data.total)}`} of {data.total}</span>
+            <div>
+              <p className="eyebrow">Partners</p>
+              <h2>{result.total} {result.total === 1 ? "match" : "matches"}</h2>
+            </div>
+            <span aria-live="polite">
+              {isPending ? "Updating…" : formatRange(result.offset, result.matches.length, result.total)}
+            </span>
           </div>
 
-          {data.matches.length === 0 ? (
-            <section className="card empty-state"><h2>No trade matches</h2><p className="muted">Try another section or match type, or check again after collections change.</p></section>
+          {result.matches.length === 0 ? (
+            <section className="card empty-state">
+              <h2>No trade partners yet</h2>
+              <p className="muted">
+                Try another section or match type, or check again once collections change.
+              </p>
+            </section>
           ) : (
             <section className="trade-match-list" aria-label="Trade partners">
-              {data.matches.map((match, index) => (
-                <article className="card trade-match-card" key={`${match.displayName}-${index}`}>
-                  <header><div><p className="eyebrow">{match.kind === "two-way" ? "Two-way match" : "One-way match"}</p><h2>{match.displayName}</h2></div><span className="status-badge">{match.offeredCount + match.wantedCount} stickers</span></header>
-                  <StickerList title="They can offer you" stickers={match.offersToYou} />
-                  <StickerList title="You can offer them" stickers={match.needsFromYou} />
-                </article>
+              {result.matches.map((match, index) => (
+                <PartnerCard key={`${match.displayName}-${result.offset + index}`} match={match} index={index} />
               ))}
             </section>
           )}
 
-          {data.total > limit ? (
-            <nav className="trade-pagination" aria-label="Trade match pages">
-              <button className="secondary-button" disabled={offset === 0} onClick={() => setOffset(Math.max(0, offset - limit))}>Previous</button>
-              <button className="secondary-button" disabled={offset + limit >= data.total} onClick={() => setOffset(offset + limit)}>Next</button>
+          {totalPages > 1 ? (
+            <nav className="trade-pagination" aria-label="Trade partner pages">
+              <button
+                type="button"
+                className="secondary-button"
+                disabled={page <= 1 || isPending}
+                onClick={() => apply(filters, page - 1)}
+              >
+                Previous
+              </button>
+              <span className="muted">Page {page} of {totalPages}</span>
+              <button
+                type="button"
+                className="secondary-button"
+                disabled={page >= totalPages || isPending}
+                onClick={() => apply(filters, page + 1)}
+              >
+                Next
+              </button>
             </nav>
           ) : null}
         </>
