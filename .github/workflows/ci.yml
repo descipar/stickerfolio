@@ -112,7 +112,7 @@ jobs:
       - name: Build the application
         run: pnpm build
       - name: Install the Playwright Chromium browser
-        run: npx playwright install --with-deps chromium
+        run: pnpm exec playwright install --with-deps chromium
       - name: Run the mobile acceptance suite
         run: pnpm test:e2e
       - name: Upload the Playwright report on failure
