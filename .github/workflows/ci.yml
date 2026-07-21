@@ -66,6 +66,9 @@ jobs:
 
   mobile-e2e:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
     env:
       DATABASE_URL: postgresql://stickerfolio:ci-only@localhost:5432/stickerfolio
       DATABASE_SSL_MODE: disable
@@ -110,11 +113,23 @@ jobs:
       - name: Seed deterministic end-to-end fixtures
         run: pnpm seed:e2e
       - name: Build the application
-        run: pnpm build
+        run: set -o pipefail; pnpm build 2>&1 | tee -a /tmp/e2e.log
       - name: Install the Playwright Chromium browser
-        run: pnpm exec playwright install --with-deps chromium
+        run: set -o pipefail; pnpm exec playwright install --with-deps chromium 2>&1 | tee -a /tmp/e2e.log
       - name: Run the mobile acceptance suite
-        run: pnpm test:e2e
+        run: set -o pipefail; pnpm test:e2e 2>&1 | tee -a /tmp/e2e.log
+      - name: Report diagnostic output on failure
+        if: failure()
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR: ${{ github.event.pull_request.number }}
+          REPO: ${{ github.repository }}
+        run: |
+          body="$(tail -c 8000 /tmp/e2e.log 2>/dev/null || echo 'no /tmp/e2e.log produced')"
+          jq -n --arg b "$body" '{body: ("<!--e2e-diagnostic-->\n```\n" + $b + "\n```")}' > /tmp/comment.json
+          if [ -n "$PR" ]; then
+            curl -sS -X POST -H "Authorization: Bearer $GH_TOKEN" -H "Accept: application/vnd.github+json" "https://api.github.com/repos/$REPO/issues/$PR/comments" -d @/tmp/comment.json > /dev/null
+          fi
       - name: Upload the Playwright report on failure
         if: failure()
         uses: actions/upload-artifact@v4
