@@ -3,6 +3,7 @@ import type { Pool, PoolClient } from "pg";
 import { getPool, query, withTransaction, type QueryExecutor } from "@/infrastructure/database";
 import { writeAuditEvent } from "@/infrastructure/observability";
 
+import { lockAdministratorsForMutation } from "./administrator-lock";
 import { getAuth, type StickerfolioAuth } from "./auth";
 import { normalizeEmail } from "./email";
 import { verifyPassword } from "./password";
@@ -36,33 +37,28 @@ async function verifyOwnPassword(
 }
 
 /**
- * Guards the roadmap guarantee that at least one administrator who can actually
- * sign in always exists (Roadmap 11.4, risk section 18). All administrator rows
- * are locked FOR UPDATE so two concurrent lifecycle changes cannot both slip
- * past the check and leave the installation without a usable administrator.
- *
- * Only ACTIVE administrators count: a suspended administrator cannot sign in and
- * therefore cannot reactivate anyone. The action is refused when the target is
- * an administrator and no OTHER administrator with `status = 'active'` would
- * remain afterwards. This stops the sole active administrator from deleting or
- * deactivating itself even while a suspended administrator still exists — which
- * would otherwise leave nobody able to sign in and reactivate that suspended
- * one. The restricted bootstrap admin is an ordinary administrator here, so this
- * also preserves the "never recreate/reset" property.
+ * Self-service side of the shared last-active-administrator guard. It delegates
+ * to {@link lockAdministratorsForMutation}, which locks every administrator row
+ * FOR UPDATE and refuses the removing mutation when the target is an
+ * administrator and no OTHER administrator with `status = 'active'` would remain
+ * (Roadmap 11.4, risk section 18). Only ACTIVE administrators count: a suspended
+ * administrator cannot sign in and therefore cannot reactivate anyone, so the
+ * sole active administrator cannot delete or deactivate itself even while a
+ * suspended administrator still exists. The restricted bootstrap admin is an
+ * ordinary administrator here, so this preserves the "never recreate/reset"
+ * property. No `actorUserId` is passed: the actor is the target itself and is
+ * identified from the session, so there is no separate stale-authorization actor
+ * to revalidate.
  */
 async function assertNotLastAdministrator(client: PoolClient, userId: string): Promise<void> {
-  const admins = await query<{ id: string; status: string }>(
-    `SELECT id, status FROM "user" WHERE role = 'admin' FOR UPDATE`,
-    [],
+  await lockAdministratorsForMutation(
     client,
+    { targetUserId: userId, removesActiveAdministrator: true },
+    {
+      lastActiveAdministrator: () =>
+        new AccountLifecycleError("The last active administrator account cannot be removed.", 409),
+    },
   );
-  const targetIsAdmin = admins.rows.some((row) => row.id === userId);
-  const otherActiveAdmins = admins.rows.filter(
-    (row) => row.id !== userId && row.status === "active",
-  );
-  if (targetIsAdmin && otherActiveAdmins.length === 0) {
-    throw new AccountLifecycleError("The last active administrator account cannot be removed.", 409);
-  }
 }
 
 /**
@@ -118,12 +114,13 @@ export async function deactivateOwnAccount(
  * full export, so it is not treated as one here. Deletion is intentionally
  * standalone and never blocks on export.
  *
- * NOTE: invitation-based registration is not on this branch (M1, #87). The
- * agreed data policy is that `invitations.created_by_user_id` becomes NULLABLE
- * with ON DELETE SET NULL in #87, so deleting an administrator does NOT
- * cascade-delete their pending invitations and accepted-invitation records
- * survive. The combined deletion-with-pending/accepted-invitations integration
- * test will be added once M1 (#87) merges.
+ * Invitations: invitation-based registration (#87) is merged, so
+ * `invitations.created_by_user_id` is NULLABLE with ON DELETE SET NULL.
+ * Deleting a user therefore does NOT cascade-delete the invitations they
+ * created: their pending invitations survive with the creator cleared to NULL,
+ * and accepted-invitation records keep their acceptor. The combined
+ * deletion-with-pending/accepted-invitations behaviour is covered by the
+ * account-lifecycle integration tests.
  */
 export async function deleteOwnAccount(
   headers: Headers,

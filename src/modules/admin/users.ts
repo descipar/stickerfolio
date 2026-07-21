@@ -4,6 +4,7 @@ import { DatabaseError, getPool, query, withTransaction } from "@/infrastructure
 import { writeAuditEvent, writeLog } from "@/infrastructure/observability";
 import {
   hashPassword,
+  lockAdministratorsForMutation,
   normalizeEmail,
   requireIdentity,
   verifyPassword,
@@ -264,6 +265,15 @@ export async function resetManagedUserPassword(
   );
 }
 
+/**
+ * Administrator suspends or reactivates a user. Suspension of an administrator
+ * joins the shared last-active-administrator locking protocol
+ * ({@link lockAdministratorsForMutation}): it locks the administrator rows,
+ * revalidates the acting administrator, and refuses to suspend the last active
+ * administrator, so it cannot race deletion or role changes into leaving zero
+ * active administrators. Reactivation only adds capacity, so it locks and
+ * revalidates the actor but does not enforce the invariant.
+ */
 export async function setManagedUserStatus(
   headers: Headers,
   userId: string,
@@ -276,6 +286,19 @@ export async function setManagedUserStatus(
     throw new AdminError("Administrators cannot suspend their own account.");
   }
   await withTransaction(async (client) => {
+    await lockAdministratorsForMutation(
+      client,
+      {
+        targetUserId: userId,
+        actorUserId: actor.userId,
+        removesActiveAdministrator: status === "suspended",
+      },
+      {
+        lastActiveAdministrator: () =>
+          new AdminError("The last active administrator account cannot be suspended.", 409),
+        actorNoLongerAdministrator: () => new AdminError("Administrator access required.", 403),
+      },
+    );
     const result = await query(
       `UPDATE "user" SET status = $1, "updatedAt" = now() WHERE id = $2`,
       [status, userId],
@@ -294,6 +317,15 @@ export async function setManagedUserStatus(
   );
 }
 
+/**
+ * Administrator changes a user's role. Demotion of an administrator joins the
+ * shared last-active-administrator locking protocol
+ * ({@link lockAdministratorsForMutation}) inside a transaction: it locks the
+ * administrator rows, revalidates the acting administrator, and refuses to demote
+ * the last active administrator, closing the race with concurrent deletion or
+ * suspension. Promotion only adds capacity, so it locks and revalidates the
+ * actor without enforcing the invariant.
+ */
 export async function setManagedUserRole(
   headers: Headers,
   userId: string,
@@ -305,12 +337,27 @@ export async function setManagedUserRole(
   if (actor.userId === userId && role !== "admin") {
     throw new AdminError("Administrators cannot remove their own administrator role.");
   }
-  const result = await query(
-    `UPDATE "user" SET role = $1, "updatedAt" = now() WHERE id = $2`,
-    [role, userId],
-    pool,
-  );
-  if (result.rowCount !== 1) throw new AdminError("User not found.", 404);
+  await withTransaction(async (client) => {
+    await lockAdministratorsForMutation(
+      client,
+      {
+        targetUserId: userId,
+        actorUserId: actor.userId,
+        removesActiveAdministrator: role !== "admin",
+      },
+      {
+        lastActiveAdministrator: () =>
+          new AdminError("The last active administrator account cannot be demoted.", 409),
+        actorNoLongerAdministrator: () => new AdminError("Administrator access required.", 403),
+      },
+    );
+    const result = await query(
+      `UPDATE "user" SET role = $1, "updatedAt" = now() WHERE id = $2`,
+      [role, userId],
+      client,
+    );
+    if (result.rowCount !== 1) throw new AdminError("User not found.", 404);
+  }, pool);
   writeAuditEvent(
     "account.role_changed",
     { type: "user", userId: actor.userId },
@@ -331,14 +378,17 @@ export async function setManagedUserRole(
  *    no other user's rows are affected, and no foreign key is violated. Shared
  *    catalog rows are referenced ON DELETE RESTRICT, which blocks deleting
  *    catalog data, not the user's collection rows.
- *  - Guards the last active administrator: all administrator rows are locked
- *    FOR UPDATE and, if the target is an administrator and no OTHER
- *    administrator with status = 'active' would remain, deletion is refused.
- *    Only active administrators count because a suspended administrator cannot
- *    sign in to reactivate anyone, so the sole active administrator cannot be
- *    deleted even when a suspended administrator still exists. This preserves
- *    the roadmap guarantee that the bootstrap admin is never left
- *    un-recreatable (Roadmap 11.4 / 18).
+ *  - Guards the last active administrator through the shared locking protocol
+ *    (lockAdministratorsForMutation): all administrator rows are locked
+ *    FOR UPDATE, the acting administrator is revalidated as a still-active
+ *    administrator, and deletion is refused if the target is an administrator
+ *    and no OTHER administrator with status = 'active' would remain. Only active
+ *    administrators count because a suspended administrator cannot sign in to
+ *    reactivate anyone, so the sole active administrator cannot be deleted even
+ *    when a suspended administrator still exists. Sharing the lock with
+ *    suspension and role changes prevents concurrent mutations from together
+ *    leaving zero active administrators, preserving the roadmap guarantee that
+ *    the bootstrap admin is never left un-recreatable (Roadmap 11.4 / 18).
  *  - Administrators delete their own account from account settings, never from
  *    the management panel, mirroring the existing self-action guards.
  *
@@ -350,12 +400,13 @@ export async function setManagedUserRole(
  * #68 only covers missing/duplicate lists and is not a full export). Deletion
  * never blocks on export.
  *
- * NOTE: invitation-based registration is not on this branch (M1, #87). The
- * agreed data policy is that `invitations.created_by_user_id` becomes NULLABLE
- * with ON DELETE SET NULL in #87, so deleting an administrator does NOT
- * cascade-delete their pending invitations and accepted-invitation records
- * survive. The combined deletion-with-pending/accepted-invitations integration
- * test will be added once M1 (#87) merges.
+ * Invitations: invitation-based registration (#87) is merged, so
+ * `invitations.created_by_user_id` is NULLABLE with ON DELETE SET NULL.
+ * Deleting an administrator therefore does NOT cascade-delete the invitations
+ * they created: pending invitations survive with the creator cleared to NULL,
+ * and accepted-invitation records keep their acceptor. The combined
+ * deletion-with-pending/accepted-invitations behaviour is covered by the
+ * account-lifecycle integration tests.
  */
 export async function deleteManagedUser(
   headers: Headers,
@@ -369,13 +420,17 @@ export async function deleteManagedUser(
     throw new AdminError("Use your account settings to delete your own account.");
   }
   await withTransaction(async (client) => {
-    const admins = await query<{ id: string; status: UserStatus }>(
-      `SELECT id, status FROM "user" WHERE role = 'admin' FOR UPDATE`,
-      [],
+    await lockAdministratorsForMutation(
       client,
+      { targetUserId: userId, actorUserId: actor.userId, removesActiveAdministrator: true },
+      {
+        lastActiveAdministrator: () =>
+          new AdminError("The last active administrator account cannot be deleted.", 409),
+        actorNoLongerAdministrator: () => new AdminError("Administrator access required.", 403),
+      },
     );
-    const target = await query<{ email: string; role: UserRole }>(
-      `SELECT email, role FROM "user" WHERE id = $1 FOR UPDATE`,
+    const target = await query<{ email: string }>(
+      `SELECT email FROM "user" WHERE id = $1 FOR UPDATE`,
       [userId],
       client,
     );
@@ -383,12 +438,6 @@ export async function deleteManagedUser(
     if (!targetRow) throw new AdminError("User not found.", 404);
     if (normalizeEmail(confirmationEmail) !== targetRow.email) {
       throw new AdminError("Type the exact account email to confirm deletion.");
-    }
-    const otherActiveAdmins = admins.rows.filter(
-      (row) => row.id !== userId && row.status === "active",
-    );
-    if (targetRow.role === "admin" && otherActiveAdmins.length === 0) {
-      throw new AdminError("The last active administrator account cannot be deleted.", 409);
     }
     const deletion = await query(`DELETE FROM "user" WHERE id = $1`, [userId], client);
     if (deletion.rowCount !== 1) throw new AdminError("User not found.", 404);

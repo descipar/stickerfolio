@@ -14,6 +14,8 @@ Stickerfolio currently provides:
 - trade filters by team or section, match type, and compatibility;
 - separate CSV exports for missing stickers and available duplicates;
 - self-service and administrator-managed login email changes with session revocation;
+- configurable registration modes (closed, invitation-only, or open self-registration) with guided first-run onboarding;
+- self-service account deactivation and permanent, confirmation-gated account deletion;
 - administrator-managed users and portable album templates;
 - PostgreSQL persistence with self-hosted Docker deployment by default.
 
@@ -74,7 +76,7 @@ Running `./start.sh` again is safe: existing secrets and PostgreSQL data are ret
 
 ## Current status
 
-The repository contains the first usable MVP: PostgreSQL persistence, Better Auth sessions, administrator-managed user accounts, self-service and administrator-managed login email changes, administrator-managed album templates, multiple personal albums, mobile sticker search and filters, quantity tracking from zero through 99, separate CSV exports, and private opt-in trade matching. Security-sensitive account and album-publication actions are emitted as data-minimized structured audit events. Self-registration, invitations, trade requests, and messaging remain on the [GitHub roadmap](https://github.com/descipar/stickerfolio/issues).
+The repository contains the first usable MVP: PostgreSQL persistence, Better Auth sessions, administrator-managed user accounts, configurable registration (closed, invitation-only, or open self-registration) with guided first-run onboarding, self-service and administrator-managed login email changes, self-service account deactivation and permanent account deletion, administrator-managed album templates, multiple personal albums, mobile sticker search and filters, quantity tracking from zero through 99, separate CSV exports, and private opt-in trade matching. Security-sensitive account and album-publication actions are emitted as data-minimized structured audit events. Binding trade requests and in-app messaging remain on the [GitHub roadmap](https://github.com/descipar/stickerfolio/issues).
 
 The agreed product and architecture decisions are documented in the [roadmap](docs/ROADMAP.md).
 The provider-neutral catalog interchange contract is documented in the [album template format](docs/ALBUM_TEMPLATE_FORMAT.md).
@@ -131,6 +133,8 @@ After an administrator has published an album template, collectors can add that 
 The album view provides separate **Export missing list (CSV)** and **Export duplicates list (CSV)** actions. The missing export contains every sticker with quantity zero. The duplicates export contains only quantities greater than one and includes both the total quantity and the number of spare copies. Exports contain only the signed-in collector's own collection data.
 
 Every user can change their own login address from **Account** after confirming the current password. Administrators can also correct another user's address from **Users**. A successful change signs the affected user out on all devices; the next login uses the normalized new address.
+
+From **Account**, a user can also deactivate their account or permanently delete it. Deactivation is a reversible suspension that revokes every session and blocks sign-in until an administrator reactivates the account. Deletion is irreversible and requires confirming the current password and typing the exact login email. Administrators manage suspension, reactivation, and deletion for other users from **Users**, and the last active administrator can never be removed, suspended, or demoted.
 
 ## Using trade matching
 
@@ -255,7 +259,7 @@ The production server listens on port `3500`.
 
 ## HTTP security baseline
 
-Login and future self-registration attempts are limited to five requests per minute and client address. Invitation redemption uses the same five-per-minute policy as soon as that endpoint is introduced. These counters are held in the application process: they are appropriate for the documented single-instance deployment, but multiple application replicas are unsupported until the limiter uses shared storage.
+Login attempts are limited to five requests per minute and client address. The open self-registration and invitation-redemption endpoints are each limited to ten requests per minute and client address. These counters are held in the application process: they are appropriate for the documented single-instance deployment, but multiple application replicas are unsupported until the limiter uses shared storage.
 
 Without a configured trusted client IP header, all callers share a conservative per-endpoint bucket. This is safe against spoofed forwarding headers, but may cause one busy client to throttle others temporarily. Configure a trusted overwritten header only when the origin cannot be reached around the reverse proxy.
 
