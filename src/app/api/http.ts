@@ -1,9 +1,10 @@
 import { NextResponse } from "next/server";
 
+import { AccountLifecycleError } from "@/modules/identity";
 import { AdminError } from "@/modules/admin";
 import { CatalogError } from "@/modules/catalog";
 import { CollectionError } from "@/modules/collections";
-import { AccountLifecycleError, AuthenticationError, EmailChangeError } from "@/modules/identity";
+import { AuthenticationError, EmailChangeError, InvitationError, RegistrationError } from "@/modules/identity";
 import { TradingError } from "@/modules/trading";
 
 export function apiError(error: unknown): NextResponse {
@@ -19,6 +20,12 @@ export function apiError(error: unknown): NextResponse {
       { status: error.status },
     );
   }
+  if (error instanceof RegistrationError) {
+    return NextResponse.json({ error: error.message }, { status: error.status });
+  }
+  if (error instanceof InvitationError) {
+    return NextResponse.json({ error: error.message }, { status: error.status });
+  }
   if (error instanceof EmailChangeError) {
     return NextResponse.json({ error: error.message }, { status: error.status });
   }
@@ -30,7 +37,14 @@ export function apiError(error: unknown): NextResponse {
   }
   if (error instanceof CollectionError) {
     return NextResponse.json(
-      { error: error.status === 404 ? "Collection not found." : "The collection could not be updated." },
+      {
+        error:
+          error.status === 404
+            ? "Collection not found."
+            : error.status === 409
+              ? error.message
+              : "The collection could not be updated.",
+      },
       { status: error.status },
     );
   }
