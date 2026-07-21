@@ -10,12 +10,14 @@ import {
 import { seedAlbumTemplate } from "@/modules/catalog";
 import { addOwnCollection, setOwnHoldingQuantity } from "@/modules/collections";
 import {
+  acceptInvitation,
   AccountLifecycleError,
   bootstrapAdminEmail,
   bootstrapAdminPassword,
   bootstrapInitialAdmin,
   changeOwnPassword,
   createAuth,
+  createInvitation,
   deactivateOwnAccount,
   deleteOwnAccount,
 } from "@/modules/identity";
@@ -44,7 +46,15 @@ function cookieFrom(response: Response): string {
 }
 
 async function signIn(email: string, password: string): Promise<{ status: number; headers: Headers }> {
-  const response = await auth.api.signInEmail({ body: { email, password }, asResponse: true });
+  return signInWith(auth, email, password);
+}
+
+async function signInWith(
+  authInstance: typeof auth,
+  email: string,
+  password: string,
+): Promise<{ status: number; headers: Headers }> {
+  const response = await authInstance.api.signInEmail({ body: { email, password }, asResponse: true });
   return {
     status: response.status,
     headers: response.status === 200 ? new Headers({ cookie: cookieFrom(response) }) : new Headers(),
@@ -270,5 +280,186 @@ describe("account lifecycle: suspension, deactivation, and deletion", () => {
     expect(serialized).not.toContain("alice@example.test");
     expect(serialized).not.toContain(stickerOne);
     output.mockRestore();
+  });
+});
+
+/**
+ * Combined lifecycle: deleting a user who created invitations must not remove
+ * the invitations. The agreed data policy (M1, #87) makes
+ * `invitations.created_by_user_id` NULLABLE with ON DELETE SET NULL, so a
+ * pending invitation survives deletion with its creator cleared to NULL, and an
+ * accepted invitation survives keeping its acceptor while the creator is
+ * cleared. This is the test the deletion code (both admin- and self-service
+ * paths) deferred until the real invitations table landed on main.
+ */
+describe("account lifecycle: deleting an invitation creator preserves the invitations", () => {
+  const lifecyclePool = createPool(environment);
+  const lifecycleAuth = createAuth(environment, lifecyclePool);
+
+  const primaryAdminPassword = "Primary-admin-1!";
+
+  interface InvitationRow {
+    created_by_user_id: string | null;
+    accepted_by_user_id: string | null;
+    email: string;
+  }
+
+  async function invitationRow(id: string): Promise<InvitationRow | undefined> {
+    const result = await query<InvitationRow>(
+      `SELECT created_by_user_id, accepted_by_user_id, email FROM invitations WHERE id = $1`,
+      [id],
+      lifecyclePool,
+    );
+    return result.rows[0];
+  }
+
+  async function invitationCount(): Promise<number> {
+    const result = await query<{ count: number }>(
+      `SELECT count(*)::int AS count FROM invitations`,
+      [],
+      lifecyclePool,
+    );
+    return result.rows[0]!.count;
+  }
+
+  let primaryAdminHeaders: Headers;
+
+  beforeAll(async () => {
+    await query(`TRUNCATE "user", albums, collector_profiles CASCADE`, [], lifecyclePool);
+    await bootstrapInitialAdmin(lifecyclePool);
+    const initial = await signInWith(lifecycleAuth, bootstrapAdminEmail, bootstrapAdminPassword);
+    await changeOwnPassword(initial.headers, bootstrapAdminPassword, primaryAdminPassword, lifecycleAuth, lifecyclePool);
+    primaryAdminHeaders = (await signInWith(lifecycleAuth, bootstrapAdminEmail, primaryAdminPassword)).headers;
+  });
+
+  afterAll(async () => {
+    await lifecyclePool.end();
+  });
+
+  it("keeps pending and accepted invitations when their admin creator is deleted via deleteManagedUser", async () => {
+    // A second administrator is the invitation creator; the bootstrap admin
+    // stays behind so removing the creator is never a last-admin deletion.
+    const creator = await createManagedUser(
+      primaryAdminHeaders,
+      {
+        email: "invite-admin@example.test",
+        displayName: "Invite Admin",
+        initialPassword: "Invite-admin-1!",
+        role: "admin",
+      },
+      lifecycleAuth,
+      lifecyclePool,
+    );
+
+    const pending = await createInvitation(
+      { email: "pending-target@example.test", displayName: "Pending Target", createdByUserId: creator.id },
+      lifecyclePool,
+    );
+    const toAccept = await createInvitation(
+      { email: "accepted-target@example.test", displayName: "Accepted Target", createdByUserId: creator.id },
+      lifecyclePool,
+    );
+    // Another user accepts the second invitation, creating the acceptor account.
+    const acceptor = await acceptInvitation(
+      { token: toAccept.token, password: "Accepted-pass-1!", displayName: "Accepted Target" },
+      lifecyclePool,
+      "invitation",
+    );
+
+    expect((await invitationRow(pending.id))?.created_by_user_id).toBe(creator.id);
+    expect((await invitationRow(toAccept.id))?.accepted_by_user_id).toBe(acceptor.userId);
+    expect(await invitationCount()).toBe(2);
+
+    // Deleting the creator through the admin panel must succeed and must not
+    // delete the invitations (created_by is cleared via ON DELETE SET NULL).
+    await expect(
+      deleteManagedUser(primaryAdminHeaders, creator.id, "invite-admin@example.test", lifecycleAuth, lifecyclePool),
+    ).resolves.toBeUndefined();
+
+    // The creator user is gone.
+    const creatorGone = await query<{ count: number }>(
+      `SELECT count(*)::int AS count FROM "user" WHERE id = $1`,
+      [creator.id],
+      lifecyclePool,
+    );
+    expect(creatorGone.rows[0]!.count).toBe(0);
+
+    // Both invitations survive; the creator link is now NULL on both.
+    expect(await invitationCount()).toBe(2);
+    const pendingAfter = await invitationRow(pending.id);
+    expect(pendingAfter).toBeTruthy();
+    expect(pendingAfter!.created_by_user_id).toBeNull();
+    expect(pendingAfter!.accepted_by_user_id).toBeNull();
+
+    const acceptedAfter = await invitationRow(toAccept.id);
+    expect(acceptedAfter).toBeTruthy();
+    expect(acceptedAfter!.created_by_user_id).toBeNull();
+    // The accepted invitation keeps its acceptor, whose account still exists.
+    expect(acceptedAfter!.accepted_by_user_id).toBe(acceptor.userId);
+    const acceptorStillHere = await query<{ count: number }>(
+      `SELECT count(*)::int AS count FROM "user" WHERE id = $1`,
+      [acceptor.userId],
+      lifecyclePool,
+    );
+    expect(acceptorStillHere.rows[0]!.count).toBe(1);
+  });
+
+  it("keeps pending and accepted invitations when their creator deletes their own account via deleteOwnAccount", async () => {
+    // A regular user is recorded as the creator of the invitations, then removes
+    // their own account through self-service.
+    const selfUserPassword = "Selfuser-pass-1!";
+    const selfUser = await createManagedUser(
+      primaryAdminHeaders,
+      {
+        email: "self-creator@example.test",
+        displayName: "Self Creator",
+        initialPassword: selfUserPassword,
+        role: "user",
+      },
+      lifecycleAuth,
+      lifecyclePool,
+    );
+    // Clear the first-login password change so the user can sign in directly.
+    await query(`UPDATE "user" SET "mustChangePassword" = false WHERE id = $1`, [selfUser.id], lifecyclePool);
+    const selfHeaders = (await signInWith(lifecycleAuth, "self-creator@example.test", selfUserPassword)).headers;
+
+    const countBefore = await invitationCount();
+    const pending = await createInvitation(
+      { email: "self-pending@example.test", displayName: "Self Pending", createdByUserId: selfUser.id },
+      lifecyclePool,
+    );
+    const toAccept = await createInvitation(
+      { email: "self-accepted@example.test", displayName: "Self Accepted", createdByUserId: selfUser.id },
+      lifecyclePool,
+    );
+    const acceptor = await acceptInvitation(
+      { token: toAccept.token, password: "Selfaccept-pass-1!", displayName: "Self Accepted" },
+      lifecyclePool,
+      "invitation",
+    );
+
+    // Self-service deletion succeeds for a non-administrator.
+    await expect(
+      deleteOwnAccount(selfHeaders, selfUserPassword, "self-creator@example.test", lifecycleAuth, lifecyclePool),
+    ).resolves.toBeUndefined();
+
+    const selfGone = await query<{ count: number }>(
+      `SELECT count(*)::int AS count FROM "user" WHERE id = $1`,
+      [selfUser.id],
+      lifecyclePool,
+    );
+    expect(selfGone.rows[0]!.count).toBe(0);
+
+    // Both new invitations survive with their creator cleared to NULL.
+    expect(await invitationCount()).toBe(countBefore + 2);
+    const pendingAfter = await invitationRow(pending.id);
+    expect(pendingAfter).toBeTruthy();
+    expect(pendingAfter!.created_by_user_id).toBeNull();
+    expect(pendingAfter!.accepted_by_user_id).toBeNull();
+
+    const acceptedAfter = await invitationRow(toAccept.id);
+    expect(acceptedAfter).toBeTruthy();
+    expect(acceptedAfter!.created_by_user_id).toBeNull();
+    expect(acceptedAfter!.accepted_by_user_id).toBe(acceptor.userId);
   });
 });
