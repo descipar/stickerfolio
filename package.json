@@ -20,7 +20,9 @@
     "seed:euro2024": "tsx scripts/seed-euro2024.ts",
     "seed:wm2026": "tsx scripts/seed-wm2026.ts",
     "seed:example-holdings": "tsx scripts/seed-example-holdings.ts",
-    "benchmark:argon2": "tsx scripts/benchmark-argon2.ts"
+    "benchmark:argon2": "tsx scripts/benchmark-argon2.ts",
+    "loadtest:seed": "tsx load-test/seed/seed-load-dataset.ts",
+    "loadtest:explain": "tsx load-test/scripts/run-explain.ts"
   },
   "dependencies": {
     "@node-rs/argon2": "^2.0.2",
