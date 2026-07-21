@@ -1,9 +1,13 @@
 export { AccountDangerZone } from "./account-danger-zone";
 export { AdminUsers } from "./admin-users";
 export { AdminAlbums } from "./admin-albums";
+export { AdminRegistration } from "./admin-registration";
 export { AlbumsOverview } from "./albums-overview";
 export { AppNavigation } from "./app-navigation";
 export { CollectionView } from "./collection-view";
 export { EmailChangeForm } from "./email-change-form";
+export { InvitationAcceptForm } from "./invitation-accept-form";
+export { OnboardingFlow } from "./onboarding-flow";
+export { RegisterForm } from "./register-form";
 export { TradingPreferenceForm } from "./trading-preference-form";
 export { TradeMatches } from "./trade-matches";

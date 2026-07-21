@@ -9,6 +9,8 @@ export type AuditAction =
   | "account.deleted"
   | "album_revision.published"
   | "album_revision.archived"
+  | "invitation.created"
+  | "invitation.revoked"
   | "registration_mode.configured";
 
 type AuditActor =
@@ -18,7 +20,7 @@ type AuditActor =
 export function writeAuditEvent(
   action: AuditAction,
   actor: AuditActor,
-  target: { type: "user" | "album_revision" | "registration_mode"; id: string },
+  target: { type: "user" | "album_revision" | "invitation" | "registration_mode"; id: string },
   details: Record<string, string | boolean | number | null> = {},
 ): void {
   writeLog("info", "security.audit", {
