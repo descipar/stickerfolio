@@ -1,0 +1,23 @@
+{
+  "generatedAt": "2026-07-21T00:00:00.000Z",
+  "baseUrlHint": "http://localhost:3500",
+  "authTrustedIpHeader": "x-load-test-ip",
+  "album": {
+    "id": "00000000-0000-0000-0000-000000000000",
+    "revisionId": "00000000-0000-0000-0000-000000000000",
+    "slug": "panini-world-cup-2026",
+    "title": "Panini FIFA World Cup 2026",
+    "stickerCount": 994
+  },
+  "stats": { "users": 50, "visibleCollectors": 45, "totalHoldings": 35000, "totalDuplicates": 7000 },
+  "sections": [{ "id": "00000000-0000-0000-0000-000000000000", "code": "MEX", "name": "Mexico" }],
+  "users": [
+    {
+      "email": "loadtest+0@stickerfolio.local",
+      "password": "load-test-password-2026",
+      "collectorId": "00000000-0000-0000-0000-000000000000",
+      "collectionId": "00000000-0000-0000-0000-000000000000",
+      "visible": true
+    }
+  ]
+}
