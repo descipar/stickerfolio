@@ -32,7 +32,7 @@ if [[ ! -f .env ]]; then
     app_url="$STICKERFOLIO_URL"
   else
     host_ip="$(detect_ip)"
-    [[ -n "$host_ip" ]] || fail "The Raspberry Pi IP address could not be detected. Run STICKERFOLIO_URL=http://YOUR-IP:3500 ./start.sh."
+    [[ -n "$host_ip" ]] || fail "The host address could not be detected. Run STICKERFOLIO_URL=http://YOUR-HOST:3500 ./start.sh."
     app_url="http://${host_ip}:3500"
   fi
   postgres_password="$(random_hex)"
