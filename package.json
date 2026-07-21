@@ -16,6 +16,8 @@
     "test:watch": "vitest",
     "db:migrate": "tsx scripts/migrate.ts up",
     "db:migrate:down": "tsx scripts/migrate.ts down",
+    "seed:catalogs": "tsx scripts/seed-bundled-catalogs.ts",
+    "seed:euro2024": "tsx scripts/seed-euro2024.ts",
     "seed:wm2026": "tsx scripts/seed-wm2026.ts",
     "seed:example-holdings": "tsx scripts/seed-example-holdings.ts",
     "benchmark:argon2": "tsx scripts/benchmark-argon2.ts"

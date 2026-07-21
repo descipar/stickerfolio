@@ -76,8 +76,8 @@ done
 health="$(docker inspect --format '{{if .State.Health}}{{.State.Health.Status}}{{else}}{{.State.Status}}{{end}}' "$app_container")"
 [[ "$health" == "healthy" ]] || fail "The application did not become healthy in time."
 
-printf '\nLoading the empty World Cup 2026 catalog...\n'
-docker compose exec --no-TTY app node node_modules/tsx/dist/cli.mjs scripts/seed-wm2026.ts
+printf '\nLoading the bundled empty album catalogs...\n'
+docker compose exec --no-TTY app node node_modules/tsx/dist/cli.mjs scripts/seed-bundled-catalogs.ts
 
 printf '\nStickerfolio is ready.\n\n'
 printf 'Open:     %s\n' "$app_url"

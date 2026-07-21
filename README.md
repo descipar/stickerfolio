@@ -25,6 +25,17 @@ Matching is intentionally read-only and privacy-preserving. Participation is dis
 
 Collectors can also download two focused CSV files for each personal album: a wanted list containing every missing sticker and a swap list containing every duplicate together with its available spare count. Trade requests and in-app messages remain possible future additions and are tracked in the [GitHub issues](https://github.com/descipar/stickerfolio/issues).
 
+## Bundled album catalogs
+
+Stickerfolio currently includes two reviewed, optional catalogs:
+
+| Album | Edition | Tracked items |
+| --- | --- | ---: |
+| Panini FIFA World Cup 2026 | 2026 checklist edition | 994 stickers |
+| Topps UEFA EURO 2024 | Standard German edition | 707 physical sticker carriers |
+
+The EURO 2024 count follows physical items that can be owned and traded: combined stickers such as `POL2+3` remain one quantity, while optional parallel variants do not count as additional completion requirements. The exact scope and source notes are documented in [Supported album catalogs](docs/SUPPORTED_ALBUMS.md). Other albums can be added through the provider-neutral [portable album template format](docs/ALBUM_TEMPLATE_FORMAT.md).
+
 ## Mobile interface
 
 Stickerfolio is designed around the quick checks collectors make while opening packs, sorting duplicates, and comparing albums. The responsive interface keeps collection progress, team filters, missing stickers, and spare-copy quantities usable on a phone without hiding the underlying album structure.
@@ -62,7 +73,7 @@ cd stickerfolio
 ./start.sh
 ```
 
-The script detects the Raspberry Pi address, generates private database and authentication secrets, builds and starts the containers, applies migrations, and loads the empty World Cup 2026 catalog. It creates no collector, personal album, holding, duplicate, or example holding. In particular, the optional example holdings dataset is never loaded by this script.
+The script detects the Raspberry Pi address, generates private database and authentication secrets, builds and starts the containers, applies migrations, and loads the bundled empty album catalogs. It creates no collector, personal album, holding, duplicate, or example holding. In particular, the optional example holdings dataset is never loaded by this script.
 
 At the end, the script prints the application URL and the restricted bootstrap login. The initial administrator must change the temporary password before using the administration area.
 
@@ -165,18 +176,18 @@ pnpm db:migrate
 
 For local migration development, `pnpm db:migrate:down` reverts exactly one migration. Production deployments should roll forward with a corrective migration instead of rewriting migration history.
 
-## Optional example seeds
+## Optional catalog and example seeds
 
-No album, collector profile, collection, or holding is created automatically. Only the restricted bootstrap administrator described above is created on an empty installation. The verified World Cup 2026 catalog can be loaded explicitly and idempotently:
+Database migrations create no album, collector profile, collection, or holding. Only the restricted bootstrap administrator described above is created on an empty installation. The bundled catalogs can be loaded explicitly and idempotently:
 
 ```bash
-pnpm seed:wm2026
+pnpm seed:catalogs
 ```
 
-In a Compose deployment, run the same seed from the built image:
+The individual `seed:wm2026` and `seed:euro2024` commands load only one catalog. In a Compose deployment, load both from the built image with:
 
 ```bash
-docker compose run --rm app node node_modules/tsx/dist/cli.mjs scripts/seed-wm2026.ts
+docker compose run --rm app node node_modules/tsx/dist/cli.mjs scripts/seed-bundled-catalogs.ts
 ```
 
 The repository also contains a separate example holdings dataset. It never creates a user or collector profile and requires the UUID of one unambiguous, existing profile plus an explicit dataset name:

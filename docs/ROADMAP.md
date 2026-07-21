@@ -606,9 +606,10 @@ This technical access bootstrap is not a domain seed. Album, collector, and hold
 
 Seeds deliberately create domain starting data and never run automatically at container startup.
 
-Planned seeds:
+Available seeds:
 
-- World Cup 2026 catalog seed: creates the shared template, sections, and stickers.
+- Bundled catalog seed: creates the reviewed World Cup 2026 and EURO 2024 shared templates, sections, and stickers.
+- Individual catalog seeds: load either bundled catalog independently.
 - Example holdings seed: attaches prepared sample holdings to an explicitly selected account or collector profile already created in the app.
 
 Seed requirements:
@@ -735,7 +736,7 @@ Outcome: the new foundation runs entirely on PostgreSQL with no production SQLit
 
 - separate templates from personal collections,
 - model logical albums, immutable revisions, and concrete collection revisions,
-- provide the World Cup 2026 catalog seed,
+- provide reviewed World Cup 2026 and EURO 2024 catalog seeds,
 - transfer verified source data into the new seed format,
 - provide an optional example holdings seed for an existing account,
 - create new collections from templates,
@@ -878,7 +879,7 @@ The multi-user MVP is complete when:
 2. Documented Docker Compose operation with app and PostgreSQL works.
 3. External PostgreSQL can be configured as an alternative.
 4. A fresh installation starts without collector or album data and with exactly one first-admin account restricted until its password changes.
-5. The World Cup 2026 catalog and optional example holdings load only through explicit seeds.
+5. Bundled catalogs and optional example holdings load only through explicit seeds.
 6. Users can register, sign in, and sign out.
 7. An administrator can manage users and album templates.
 8. A new user can select a predefined album during onboarding.
