@@ -76,7 +76,7 @@ function PartnerCard({ match, index }: { match: TradeMatch; index: number }) {
         className="trade-toggle"
         aria-expanded={open}
         aria-controls={detailsId}
-        aria-label={describeMatch(match)}
+        aria-label={`${match.displayName}: ${describeMatch(match)}`}
         onClick={() => setOpen((current) => !current)}
       >
         <span className="trade-toggle-copy">

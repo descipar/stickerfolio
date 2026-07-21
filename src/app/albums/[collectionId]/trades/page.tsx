@@ -4,6 +4,7 @@ import { notFound, redirect } from "next/navigation";
 
 import { AppNavigation } from "@/components/app-navigation";
 import { TradeMatches } from "@/components/trade-matches";
+import { buildTradeQuery } from "@/components/trade-summary";
 import { resolveIdentity } from "@/modules/identity";
 import {
   getOwnTradeMatches,
@@ -64,6 +65,15 @@ export default async function TradeMatchesPage({
   } catch (error) {
     if (error instanceof TradingError && error.status === 404) notFound();
     throw error;
+  }
+
+  // Clamp out-of-range pagination: a stale or crafted ?page beyond the last
+  // valid page would otherwise show an empty list next to "Page N of M".
+  // Once the real total is known, redirect to the canonical last valid page.
+  const totalPages = Math.max(1, Math.ceil(result.total / PAGE_SIZE));
+  if (result.total > 0 && page > totalPages) {
+    const canonical = buildTradeQuery({ direction, section, sort }, totalPages);
+    redirect(canonical ? `/albums/${collectionId}/trades?${canonical}` : `/albums/${collectionId}/trades`);
   }
 
   return (
