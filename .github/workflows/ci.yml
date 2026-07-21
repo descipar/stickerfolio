@@ -63,3 +63,62 @@ jobs:
       - name: Remove test deployment
         if: always()
         run: docker compose down --volumes
+
+  mobile-e2e:
+    runs-on: ubuntu-latest
+    env:
+      DATABASE_URL: postgresql://stickerfolio:ci-only@localhost:5432/stickerfolio
+      DATABASE_SSL_MODE: disable
+      APP_BASE_URL: http://localhost:3500
+      BETTER_AUTH_SECRET: ci-only-secret-with-at-least-32-characters
+      REGISTRATION_MODE: closed
+      E2E_BASE_URL: http://localhost:3500
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_DB: stickerfolio
+          POSTGRES_USER: stickerfolio
+          POSTGRES_PASSWORD: ci-only
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U stickerfolio -d stickerfolio"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11.14.0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Add the Playwright test runner
+        # Pinned and installed here rather than committed to the root manifest so
+        # the unchanged quality job keeps its frozen lockfile intact.
+        run: pnpm add -D @playwright/test@1.61.1
+      - name: Type-check the end-to-end suite
+        run: pnpm exec tsc -p e2e/tsconfig.json --noEmit
+      - name: Apply migrations and create the bootstrap admin
+        run: pnpm db:migrate
+      - name: Seed the World Cup 2026 catalog
+        run: pnpm seed:wm2026
+      - name: Seed deterministic end-to-end fixtures
+        run: pnpm seed:e2e
+      - name: Build the application
+        run: pnpm build
+      - name: Install the Playwright Chromium browser
+        run: npx playwright install --with-deps chromium
+      - name: Run the mobile acceptance suite
+        run: pnpm test:e2e
+      - name: Upload the Playwright report on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: playwright-report/
+          retention-days: 7
