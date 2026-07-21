@@ -58,28 +58,41 @@ user
 - **Deliberate confirmation.** The caller must supply the exact login email
   (and, for the self-service path, the current password). Both are verified
   server-side; hiding a UI control is never the guard.
-- **Last active-administrator guard.** All administrator rows are locked
-  `FOR UPDATE` and deletion (or deactivation) is refused when the target is an
-  administrator and no **other** administrator with `status = 'active'` would
-  remain. Only active administrators count: a suspended administrator cannot
-  sign in, so it cannot reactivate anyone. This means the sole active
-  administrator cannot delete or deactivate itself even when a suspended
-  administrator still exists — otherwise nobody could sign in to reactivate that
-  suspended administrator. This preserves the guarantee that the bootstrap
-  administrator is never left un-recreatable (Roadmap 11.4). Administrators
-  delete their own account from account settings, not from the management panel.
+- **Last active-administrator guard.** Deletion, self-service deactivation,
+  administrator suspension, and administrator demotion share one transactional
+  locking protocol (`lockAdministratorsForMutation`). Each acquires the same
+  `SELECT ... WHERE role = 'admin' FOR UPDATE` administrator-row lock **before**
+  checking and mutating, so concurrent mutations serialize and cannot jointly
+  leave the installation without an active administrator. A removing mutation is
+  refused when the target is an administrator and no **other** administrator with
+  `status = 'active'` would remain. Only active administrators count: a suspended
+  administrator cannot sign in, so it cannot reactivate anyone. This means the
+  sole active administrator cannot delete, deactivate, suspend, or demote itself
+  or the last other active administrator even when a suspended administrator
+  still exists — otherwise nobody could sign in to reactivate that suspended
+  administrator. This preserves the guarantee that the bootstrap administrator is
+  never left un-recreatable (Roadmap 11.4). Administrators delete their own
+  account from account settings, not from the management panel.
+- **Revalidation after locking.** For administrator-panel operations the acting
+  administrator is revalidated against the freshly locked snapshot after the lock
+  is taken: they must still exist and still be an **active** administrator. The
+  HTTP-layer `requireAdmin` check ran earlier and can be stale, because a
+  concurrent mutation could have deleted, suspended, or demoted the actor while
+  this already-authorized request waited on the lock. Reactivation and promotion
+  only add administrator capacity, so they take the lock and revalidate the actor
+  but do not enforce the last-administrator invariant.
 
-### Invitations (forward note)
+### Invitations
 
-Invitation-based registration is not on this branch (milestone M1 is not yet
-merged), so the `invitations` table is intentionally absent here and no
-invitation code is referenced. The agreed data policy, aligned with PR #87
-(M1): `invitations.created_by_user_id` becomes NULLABLE with
-`ON DELETE SET NULL`, so deleting an administrator does **not** cascade-delete
-their pending invitations, and accepted-invitation records survive the removal
-of their creator. This is called out in code comments next to the delete use
-cases. The combined deletion-with-pending/accepted-invitations integration test
-will be added once M1 (#87) merges.
+Invitation-based registration (#87) is merged, so the `invitations` table is
+present and `invitations.created_by_user_id` is NULLABLE with
+`ON DELETE SET NULL`. Deleting a user therefore does **not** cascade-delete the
+invitations they created: their pending invitations survive with the creator
+cleared to `NULL`, and accepted-invitation records keep their acceptor while the
+creator link is cleared. This is called out in code comments next to both the
+administrator and self-service delete use cases, and the combined
+deletion-with-pending/accepted-invitations behaviour is covered by the
+account-lifecycle integration tests.
 
 ## Data export before deletion
 
