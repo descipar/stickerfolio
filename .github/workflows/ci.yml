@@ -97,10 +97,6 @@ jobs:
           node-version: 22
           cache: pnpm
       - run: pnpm install --frozen-lockfile
-      - name: Add the Playwright test runner
-        # Pinned and installed here rather than committed to the root manifest so
-        # the unchanged quality job keeps its frozen lockfile intact.
-        run: pnpm add -D @playwright/test@1.61.1
       - name: Type-check the end-to-end suite
         run: pnpm exec tsc -p e2e/tsconfig.json --noEmit
       - name: Apply migrations and create the bootstrap admin

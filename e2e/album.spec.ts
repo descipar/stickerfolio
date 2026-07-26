@@ -84,3 +84,26 @@ test.describe("album view error state", () => {
     await expectNoHorizontalOverflow(page);
   });
 });
+
+test.describe("album view loading state", () => {
+  test("shows a loading status while stickers are being fetched", async ({ page }) => {
+    const { collectionId } = readSeededState();
+    let releaseRequest: (() => void) | undefined;
+    const requestReleased = new Promise<void>((resolve) => {
+      releaseRequest = resolve;
+    });
+
+    await page.route(`**/api/collections/${collectionId}/stickers`, async (route) => {
+      await requestReleased;
+      await route.continue();
+    });
+
+    await page.goto(`/albums/${collectionId}`);
+    await expect(page.getByRole("status")).toHaveText("Loading stickers…");
+    await expectNoHorizontalOverflow(page);
+
+    releaseRequest?.();
+    await expect(page.getByRole("heading", { name: albumTitle })).toBeVisible();
+    expect(await page.locator("li.sticker-row").count()).toBeGreaterThan(0);
+  });
+});

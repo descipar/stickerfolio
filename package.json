@@ -36,6 +36,7 @@
     "zod": "4.4.3"
   },
   "devDependencies": {
+    "@playwright/test": "1.61.1",
     "@testcontainers/postgresql": "12.0.4",
     "@types/node": "^22.19.0",
     "@types/pg": "8.20.0",
