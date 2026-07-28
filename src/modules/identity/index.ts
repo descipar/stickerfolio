@@ -19,6 +19,13 @@ export {
   deleteOwnAccount,
 } from "./account-lifecycle";
 export {
+  accountExportFileName,
+  accountExportFormat,
+  accountExportVersion,
+  exportOwnAccountData,
+  type AccountDataExport,
+} from "./account-export";
+export {
   lockAdministratorsForMutation,
   type AdministratorGuardErrors,
   type AdministratorLockOptions,

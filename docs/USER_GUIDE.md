@@ -30,7 +30,17 @@ Each personal album provides two separate exports:
 - **Missing list** contains every sticker with quantity zero.
 - **Duplicates list** contains only quantities above one and reports both total quantity and spare count.
 
-Exports are scoped to the signed-in collector and one selected personal album. They do not include another collector's holdings. These focused exports are also the supported pre-deletion data export described in [Account lifecycle](ACCOUNT_LIFECYCLE.md).
+Exports are scoped to the signed-in collector and one selected personal album. They do not include another collector's holdings. These focused files are intended for wanted and swap lists; they are not a complete account backup.
+
+## Complete account export
+
+The account danger zone provides one versioned JSON download containing the signed-in user's
+non-sensitive account fields, collector profile, trading preference, every personal collection,
+and every sticker quantity from zero through 99. It includes missing stickers, owned single
+copies, and duplicates in one portable file.
+
+The export never contains password hashes, sessions, tokens, invitations, or another user's
+data. Download it before permanent account deletion if you want to retain a complete copy.
 
 ## Trade matching
 

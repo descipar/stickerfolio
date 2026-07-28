@@ -10,6 +10,7 @@ A quantity of zero means a sticker is missing, one means it is owned, and every 
 - mobile-friendly search, section filters, progress, and quantity controls;
 - duplicate quantities from one through 99;
 - separate CSV exports for missing stickers and available duplicates;
+- a complete, portable JSON export of a collector's own account and collection data;
 - private, explicit opt-in trade matching with one-way and two-way results;
 - expandable trade details, section filters, sorting, and pagination;
 - configurable closed, invitation-only, or open registration;

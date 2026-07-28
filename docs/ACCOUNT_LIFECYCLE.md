@@ -96,18 +96,21 @@ account-lifecycle integration tests.
 
 ## Data export before deletion
 
-Acceptance interpretation (revised in review of PR #86): the account-deletion
-flow **surfaces an export-first step**, and a **complete, portable
-account-data export is tracked in issue #88**. Deletion is standalone and never
-blocks on export.
+The account-deletion flow surfaces an **export-first** step with a single,
+versioned JSON download. The file contains the signed-in user's non-sensitive
+account fields, collector profile, trading preference, every personal
+collection and every sticker quantity from zero through 99. It therefore
+preserves missing stickers, owned single copies and duplicates. Deletion is
+standalone and never blocks on export.
 
-The per-collection CSV export (issue #68) only produces missing and duplicate
-lists; it deliberately omits owned single copies, profile/account fields, and a
-single all-collections file, so it is **not** a full export and is not treated
-as the data-preservation export. Issue #88 ("Complete self-service account data
-export") tracks the complete portable export that will become the real
-"export first" target and supersedes the export-before-deletion acceptance
-point of #35.
+The per-collection CSV export (issue #68) remains a focused missing or duplicate
+list. It deliberately omits owned single copies, profile/account fields and a
+single all-collections document, so it is not treated as the data-preservation
+export.
+
+The complete export is derived exclusively from the authenticated session. It
+does not accept a user or collector identifier and excludes password hashes,
+sessions, authentication and invitation tokens, and every other user's data.
 
 Administrators cannot export another user's data because administrators have no
 access to other users' holdings (Roadmap 8.2 / 20.4); the admin delete dialog

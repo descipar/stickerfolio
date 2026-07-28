@@ -108,11 +108,10 @@ export async function deactivateOwnAccount(
  * the user's own collection rows.
  *
  * Data export: users should export their data first (Roadmap 10.3). The account
- * danger zone surfaces an explicit "export first" step, and the complete,
- * portable account-data export is tracked in issue #88. The per-collection CSV
- * export (#68) only produces missing/duplicate lists and is deliberately not a
- * full export, so it is not treated as one here. Deletion is intentionally
- * standalone and never blocks on export.
+ * danger zone links to the complete portable JSON export. The per-collection
+ * CSV files remain focused missing/duplicate lists and are not treated as a
+ * preservation export. Deletion is intentionally standalone and never blocks
+ * on export.
  *
  * Invitations: invitation-based registration (#87) is merged, so
  * `invitations.created_by_user_id` is NULLABLE with ON DELETE SET NULL.

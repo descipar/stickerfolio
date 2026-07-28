@@ -44,6 +44,11 @@ Responses include a restrictive content security policy, clickjacking protection
 
 Collector holdings are owner-scoped. Administrators manage accounts and catalogs without blanket access to personal collection or trade data. Trade matching is explicit opt-in and reveals only a display name and stickers relevant to a possible exchange.
 
+The complete account-data export is also owner-scoped from the authenticated
+session. It includes only non-sensitive account fields and the owner's profile,
+preferences, collections, and quantities; authentication secrets and other
+collectors' data are excluded. Responses are marked private and non-cacheable.
+
 Security-sensitive account and album-publication operations emit data-minimized structured audit events. Logs redact credentials, authentication tokens, and complete database URLs.
 
 Password hashing parameters and constrained-host measurements are documented in [Password hashing](PASSWORD_HASHING.md). Account deletion, suspension, session revocation, and audit behavior are documented in [Account lifecycle](ACCOUNT_LIFECYCLE.md).
