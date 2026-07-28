@@ -13,6 +13,15 @@ Use a unique random `BETTER_AUTH_SECRET` of at least 32 characters and unique da
 
 Terminate public traffic with HTTPS. Once the complete public hostname and redirect path have been verified, configure HSTS at the TLS terminator. Session cookies are HTTP-only and `SameSite=Lax`; HTTPS deployments receive Secure cookies.
 
+For an external production PostgreSQL database, set
+`DATABASE_SSL_MODE=verify-full` and provide the trusted
+`DATABASE_SSL_CA`. The `require` mode encrypts database traffic but does not
+authenticate the server and therefore remains vulnerable to an active
+man-in-the-middle endpoint. Use `disable` only across an explicitly trusted,
+isolated private link. The bundled Compose deployment uses `disable` solely
+inside its private Docker network. See [Deployment](DEPLOYMENT.md#external-postgresql)
+for the complete mode comparison.
+
 ## Trusted proxy addresses
 
 Leave `AUTH_TRUSTED_IP_HEADER` empty for direct deployments. Set it only when the application origin is reachable exclusively through a trusted reverse proxy that removes every client-supplied value and writes the real client address into one single-value header, such as `X-Real-IP`.

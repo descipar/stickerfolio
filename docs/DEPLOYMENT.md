@@ -78,13 +78,46 @@ Reserved URL characters in database passwords must be percent-encoded when they 
 
 ## External PostgreSQL
 
-Use PostgreSQL 17 or a compatible managed service and set `DATABASE_URL`, pool settings, and TLS mode in `.env`:
+Use PostgreSQL 17 or a compatible managed service. External Compose defaults to
+`verify-full`; configure the database URL and the CA certificate supplied by
+the database operator in `.env`:
+
+```dotenv
+DATABASE_URL=postgresql://stickerfolio:encoded-password@db.example.net:5432/stickerfolio
+DATABASE_SSL_MODE=verify-full
+DATABASE_SSL_CA="-----BEGIN CERTIFICATE-----\n...\n-----END CERTIFICATE-----"
+```
+
+The hostname in `DATABASE_URL` must match the database certificate. Keep TLS
+options out of the URL and configure them through `DATABASE_SSL_MODE` and
+`DATABASE_SSL_CA`, so the application applies one unambiguous TLS policy.
+
+Then start the external deployment:
 
 ```bash
 docker compose --file compose.external.yml up --detach --build
 ```
 
-The external Compose variant builds the same image but defines no PostgreSQL container or database volume. Supported TLS modes are `disable`, `require`, `verify-ca`, and `verify-full`. Use `DATABASE_SSL_CA` with verification modes and use `disable` only for a trusted private connection.
+The external Compose variant builds the same image but defines no PostgreSQL
+container or database volume.
+
+| Mode | Protection | Appropriate use |
+| --- | --- | --- |
+| `verify-full` | Encrypts the connection and verifies the certificate and database hostname using `DATABASE_SSL_CA`. | Recommended for production and the external Compose default. |
+| `verify-ca` | Uses the supplied CA for certificate verification. | Verified compatibility mode; prefer `verify-full` because it explicitly expresses the required hostname-verification policy. |
+| `require` | Encrypts traffic but accepts an unverified server identity. | Temporary compatibility or troubleshooting only; it remains vulnerable to an active man-in-the-middle endpoint. |
+| `disable` | Sends database traffic without TLS. | Only an explicitly trusted, isolated private link, such as a private container network or a separately protected tunnel. |
+
+`DATABASE_SSL_CA` is mandatory for `verify-ca` and `verify-full`; startup fails
+with a configuration error when it is missing. Treat the CA as trusted
+configuration and obtain it through the database provider or operator rather
+than downloading it from an unverified endpoint.
+
+> [!WARNING]
+> Do not use `require` merely because a provider describes it as “SSL
+> required.” It provides encryption without authenticating which PostgreSQL
+> server received the credentials. Use `verify-full` unless a documented,
+> separately secured network boundary makes that impossible.
 
 ## Updating
 

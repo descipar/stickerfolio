@@ -39,8 +39,10 @@ jobs:
       - uses: actions/checkout@v4
       - name: Prepare Compose configuration
         run: cp .env.example .env
-      - name: Verify the external database deployment has no bundled PostgreSQL service
-        run: test "$(docker compose --file compose.external.yml config --services | tr '\n' ' ')" = "migrate app "
+      - name: Verify the external database deployment shape and secure TLS default
+        run: |
+          test "$(docker compose --file compose.external.yml config --services | tr '\n' ' ')" = "migrate app "
+          test "$(docker compose --file compose.external.yml config | grep --count 'DATABASE_SSL_MODE: verify-full')" = "2"
       - name: Run the one-command first start
         run: ./start.sh
       - name: Verify application readiness and empty catalog availability
