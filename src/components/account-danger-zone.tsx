@@ -1,6 +1,5 @@
 "use client";
 
-import Link from "next/link";
 import { useState, type FormEvent } from "react";
 
 /**
@@ -12,10 +11,7 @@ import { useState, type FormEvent } from "react";
  * confirmation is not merely a UI gate. Every action revokes the current
  * session, so on success the browser is sent to the login page.
  *
- * Data export first: users should export their data before deleting. The
- * complete, portable account-data export is tracked in issue #88; until it
- * ships, the link points at the albums overview where the per-collection CSV
- * export (#68 — missing/duplicate lists only, not a full export) lives.
+ * Data export first: users can download one complete JSON file before deleting.
  * Deletion itself never blocks on export.
  */
 export function AccountDangerZone() {
@@ -67,10 +63,13 @@ export function AccountDangerZone() {
   return (
     <div className="content-stack">
       <p className="muted">
-        Before you leave, <Link href="/albums">export your collections</Link> to keep a copy of your
-        missing and duplicate lists. A complete, portable export of all your account data is planned
-        as a dedicated feature; today the albums export covers those lists only. We cannot recover
-        your data after deletion.
+        Before you leave, download a complete copy of your account, collections, quantities, and
+        trading preference. We cannot recover your data after deletion.
+      </p>
+      <p>
+        <a className="secondary-button" href="/api/account/export" download>
+          Download complete account data
+        </a>
       </p>
       {error ? <p className="state-message error" role="alert">{error}</p> : null}
 

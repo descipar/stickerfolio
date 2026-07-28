@@ -20,6 +20,7 @@ import {
   createInvitation,
   deactivateOwnAccount,
   deleteOwnAccount,
+  exportOwnAccountData,
 } from "@/modules/identity";
 
 import { createTestEnvironment } from "./create-test-environment";
@@ -33,6 +34,7 @@ const revisionId = crypto.randomUUID();
 const sectionId = crypto.randomUUID();
 const stickerOne = crypto.randomUUID();
 const stickerTwo = crypto.randomUUID();
+const stickerThree = crypto.randomUUID();
 
 const adminPassword = "Admin-pass-1!";
 const alicePassword = "Alice-pass-1!";
@@ -43,6 +45,12 @@ function cookieFrom(response: Response): string {
   const value = response.headers.get("set-cookie");
   if (!value) throw new Error("Expected a session cookie");
   return value.split(";", 1)[0]!;
+}
+
+function collectJsonKeys(value: unknown): string[] {
+  if (Array.isArray(value)) return value.flatMap(collectJsonKeys);
+  if (!value || typeof value !== "object") return [];
+  return Object.entries(value).flatMap(([key, child]) => [key, ...collectJsonKeys(child)]);
 }
 
 async function signIn(email: string, password: string): Promise<{ status: number; headers: Headers }> {
@@ -110,6 +118,7 @@ describe("account lifecycle: suspension, deactivation, and deletion", () => {
       stickers: [
         { stableId: stickerOne, stableKey: "one", sectionId, code: "A1", label: "One", sortOrder: 0 },
         { stableId: stickerTwo, stableKey: "two", sectionId, code: "A2", label: "Two", sortOrder: 1 },
+        { stableId: stickerThree, stableKey: "three", sectionId, code: "A3", label: "Three", sortOrder: 2 },
       ],
     }, pool);
 
@@ -232,7 +241,87 @@ describe("account lifecycle: suspension, deactivation, and deletion", () => {
       [revisionId],
       pool,
     );
-    expect(catalog.rows[0]!.count).toBe(2);
+    expect(catalog.rows[0]!.count).toBe(3);
+  });
+
+  it("exports only the signed-in user's complete portable account data", async () => {
+    const otherUser = await createManagedUser(adminHeaders, {
+      email: "export-neighbor@example.test",
+      displayName: "Export Neighbor",
+      initialPassword: "Neighbor-pass-1!",
+      role: "user",
+    }, auth, pool);
+    await query(
+      `UPDATE "user" SET "mustChangePassword" = false WHERE id = $1`,
+      [otherUser.id],
+      pool,
+    );
+    const otherHeaders = (await signIn("export-neighbor@example.test", "Neighbor-pass-1!")).headers;
+    const otherCollection = await addOwnCollection(otherHeaders, albumId, auth, pool);
+    await setOwnHoldingQuantity(otherHeaders, otherCollection.id, stickerThree, 4, auth, pool);
+
+    await query(
+      `UPDATE trading_preferences SET visible = true, updated_at = now()
+        WHERE collector_id = (SELECT id FROM collector_profiles WHERE user_id = $1)`,
+      [aliceId],
+      pool,
+    );
+    const exportedAt = new Date("2026-07-28T12:00:00.000Z");
+    const data = await exportOwnAccountData(aliceHeaders, auth, pool, exportedAt);
+
+    expect(data).toMatchObject({
+      format: "stickerfolio-account-export",
+      version: 1,
+      exportedAt: exportedAt.toISOString(),
+      account: {
+        id: aliceId,
+        name: "Alice",
+        email: "alice@example.test",
+        role: "user",
+        status: "active",
+      },
+      collector: {
+        displayName: "Alice",
+        tradingPreferences: { visible: true },
+        collections: [
+          {
+            album: { id: albumId, slug: "lifecycle-test", title: "Lifecycle test album" },
+            revision: { id: revisionId, number: 1 },
+          },
+        ],
+      },
+    });
+    expect(data.collector?.collections[0]?.holdings.map(({ stickerId, quantity }) => ({
+      stickerId,
+      quantity,
+    }))).toEqual([
+      { stickerId: stickerOne, quantity: 2 },
+      { stickerId: stickerTwo, quantity: 1 },
+      { stickerId: stickerThree, quantity: 0 },
+    ]);
+
+    const serialized = JSON.stringify(data);
+    expect(serialized).not.toContain(bootstrapAdminEmail);
+    expect(serialized).not.toContain("export-neighbor@example.test");
+    expect(serialized).not.toContain(otherCollection.id);
+    expect(collectJsonKeys(data)).not.toEqual(expect.arrayContaining([
+      "password",
+      "passwordHash",
+      "accessToken",
+      "refreshToken",
+      "idToken",
+      "sessionToken",
+      "token",
+    ]));
+    await expect(exportOwnAccountData(new Headers(), auth, pool)).rejects.toMatchObject({
+      status: 401,
+    });
+  });
+
+  it("exports a valid empty account document when no collector profile exists", async () => {
+    const data = await exportOwnAccountData(adminHeaders, auth, pool);
+    expect(data.account.id).toBe(adminId);
+    expect(data.collector).toBeNull();
   });
 
   it("refuses to remove the last remaining administrator", async () => {
