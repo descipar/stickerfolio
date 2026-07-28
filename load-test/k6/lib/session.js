@@ -35,6 +35,8 @@ export function login(base, user, headerName, metrics) {
   );
   metrics.loginDuration.add(res.timings.duration);
   const ok = check(res, { 'login returns 200': (r) => r.status === 200 });
-  if (!ok) metrics.domainErrors.add(1);
+  // Some resilience scenarios expect authentication to fail while the
+  // database is unavailable and therefore deliberately omit domainErrors.
+  if (!ok && metrics.domainErrors) metrics.domainErrors.add(1);
   return ok;
 }

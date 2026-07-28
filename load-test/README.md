@@ -74,16 +74,16 @@ Applied in the full run (`k6/lib/config.js` → `strictThresholds`):
 | `trade_matching_duration` | `p(95) < 1000 ms` | Roadmap / #43 |
 | `quantity_update_duration` | `p(95) < 200 ms` | Roadmap / #43 |
 | `domain_errors` | `count < 1` | no domain errors |
-| `lost_updates` | `count < 1` | no lost updates |
+| `write_consistency_errors` | `count < 1` | no read-after-write mismatch |
 | `http_req_failed` | `rate < 0.01` | — |
 | `checks` | `rate > 0.99` | — |
 
-**No domain errors / no lost updates.** `domain_errors` counts any unexpected
-non-2xx from a domain endpoint. `lost_updates` counts read-after-write
-mismatches: a VU sets a quantity, re-reads its own collection and asserts the
-value persisted. Because ownership is derived from the session and the update
-locks the row `FOR UPDATE`, each VU only mutates its own holdings, so a mismatch
-signals a genuine consistency bug rather than expected cross-user contention.
+**No domain errors / no write consistency errors.** `domain_errors` counts any
+unexpected non-2xx from a domain endpoint. `write_consistency_errors` counts
+read-after-write mismatches: a VU sets a quantity, re-reads its own collection
+and asserts the value persisted. Because every VU mutates its own collection,
+this proves persistence and isolation across collectors. It deliberately does
+not claim to test concurrent writes to the same holding.
 
 ## Prerequisites
 
@@ -177,22 +177,33 @@ behaviour. `k6/slow-db.js` is a resilience probe: while it runs, an operator
 degrades the database out-of-band and the probe asserts the app degrades
 gracefully — readiness reports the outage (503 rather than a false 200), every
 request returns within a bounded time (no indefinite hang), the process does not
-crash, and everything recovers to 200 afterwards. It intentionally does **not**
-enforce the latency targets, which do not apply while the DB is degraded.
+crash, and everything recovers to 200 afterwards. For an outage run, the probe
+requires at least one failed readiness check and then enforces successful
+readiness, authentication, and album access throughout its final recovery
+window. It intentionally does **not** enforce the latency targets, which do not
+apply while the DB is degraded.
 
 ```bash
-# terminal 1: start the probe
+# terminal 1: start the 60s probe; recovery is enforced from 45s onward
 k6 run --env DURATION=60s load-test/k6/slow-db.js
 
-# terminal 2 (operator), one of:
-load-test/scripts/degrade-db.sh outage 15      # pause PostgreSQL 15s, then resume
-load-test/scripts/degrade-db.sh pause           # ... and later: unpause
-load-test/scripts/degrade-db.sh latency 300     # +300ms via toxiproxy/pumba (prints recipe)
+# terminal 2: start this during the first few seconds so recovery finishes
+# well before the default 45s recovery window
+load-test/scripts/degrade-db.sh outage 15
+
+# optional overrides
+k6 run --env DURATION=90s --env RECOVERY_AFTER_MS=70000 load-test/k6/slow-db.js
+
+# pure latency observation (no outage/recovery assertion)
+k6 run --env EXPECT_OUTAGE=false load-test/k6/slow-db.js
+load-test/scripts/degrade-db.sh latency 300
 ```
 
 `pause`/`outage` use `docker compose pause` and need no extra tooling. Latency
 injection needs a network-fault proxy (toxiproxy or pumba); the helper prints
-the exact command rather than silently doing nothing.
+the exact command rather than silently doing nothing. An outage-mode run fails
+unless it both observes a non-ready response and reaches a clean recovery
+window; a duration shorter than `RECOVERY_AFTER_MS` therefore fails explicitly.
 
 ## EXPLAIN ANALYZE of the critical queries
 
@@ -255,5 +266,5 @@ brings the app up via Docker Compose (mirroring the `deployment` job in
 `ci.yml`), seeds a reduced dataset (8 users) through the app's own paths,
 captures EXPLAIN ANALYZE, and runs `MODE=smoke` k6 to prove the whole pipeline
 executes end-to-end. It fails only on functional regressions (domain errors,
-lost updates, failed checks), never on the hardware-specific p95 targets. The
-existing `quality` and `deployment` jobs are untouched.
+write consistency errors, failed checks), never on the hardware-specific p95
+targets. The existing `quality` and `deployment` jobs are untouched.

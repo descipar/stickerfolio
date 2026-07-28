@@ -13,6 +13,7 @@
     "test": "vitest run",
     "test:unit": "vitest run --project unit",
     "test:integration": "vitest run --project integration",
+    "test:e2e": "playwright test",
     "test:watch": "vitest",
     "db:migrate": "tsx scripts/migrate.ts up",
     "db:migrate:down": "tsx scripts/migrate.ts down",
@@ -21,6 +22,7 @@
     "seed:wm2026": "tsx scripts/seed-wm2026.ts",
     "seed:example-holdings": "tsx scripts/seed-example-holdings.ts",
     "benchmark:argon2": "tsx scripts/benchmark-argon2.ts",
+    "seed:e2e": "tsx scripts/seed-e2e.ts",
     "loadtest:seed": "tsx load-test/seed/seed-load-dataset.ts",
     "loadtest:explain": "tsx load-test/scripts/run-explain.ts"
   },
@@ -36,6 +38,7 @@
     "zod": "4.4.3"
   },
   "devDependencies": {
+    "@playwright/test": "1.61.1",
     "@testcontainers/postgresql": "12.0.4",
     "@types/node": "^22.19.0",
     "@types/pg": "8.20.0",

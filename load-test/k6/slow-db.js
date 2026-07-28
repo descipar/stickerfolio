@@ -25,6 +25,7 @@ import http from 'k6/http';
 import { check, sleep } from 'k6';
 import { Trend, Counter } from 'k6/metrics';
 import { SharedArray } from 'k6/data';
+import exec from 'k6/execution';
 
 import { baseUrl, trustedIpHeader } from './lib/config.js';
 import { login, userForVu, ipHeaders } from './lib/session.js';
@@ -35,6 +36,10 @@ const BASE = baseUrl(config);
 const IP_HEADER = trustedIpHeader(config);
 // A response slower than this is treated as an effective hang.
 const HANG_MS = Number(__ENV.HANG_MS || 10000);
+// The operator must restore the database before this point. Requests from this
+// point to the end of the run form an enforced recovery window.
+const RECOVERY_AFTER_MS = Number(__ENV.RECOVERY_AFTER_MS || 45000);
+const EXPECT_OUTAGE = (__ENV.EXPECT_OUTAGE || 'true').toLowerCase() === 'true';
 
 const readyDuration = new Trend('ready_duration', true);
 const readyUp = new Counter('ready_up');
@@ -43,6 +48,8 @@ const albumUp = new Counter('album_up');
 const albumDown = new Counter('album_down');
 const hangs = new Counter('hangs');
 const crashes = new Counter('crashes'); // connection errors / status 0
+const recoveryChecks = new Counter('recovery_checks');
+const recoveryFailures = new Counter('recovery_failures');
 
 export const options = {
   scenarios: {
@@ -57,14 +64,31 @@ export const options = {
     // No indefinite hangs and no process-level crashes, even while the DB is down.
     hangs: ['count<1'],
     crashes: ['count<1'],
+    ...(EXPECT_OUTAGE
+      ? {
+          // Prove that the outage happened and that the app recovered before
+          // the configured recovery window began.
+          ready_down: ['count>0'],
+          recovery_checks: ['count>0'],
+          recovery_failures: ['count<1'],
+        }
+      : {}),
   },
   summaryTrendStats: ['avg', 'min', 'med', 'p(95)', 'max'],
 };
 
 let loggedIn = false;
+let enteredRecoveryWindow = false;
 
 export default function () {
   const user = userForVu(users);
+  const inRecoveryWindow = EXPECT_OUTAGE && exec.instance.currentTestRunDuration >= RECOVERY_AFTER_MS;
+  if (inRecoveryWindow && !enteredRecoveryWindow) {
+    // Force one fresh authentication per VU so recovery covers the auth path,
+    // not only a session that happened to survive the outage.
+    loggedIn = false;
+    enteredRecoveryWindow = true;
+  }
 
   const ready = http.get(`${BASE}/api/health/ready`, {
     timeout: `${HANG_MS}ms`,
@@ -75,10 +99,15 @@ export default function () {
   if (ready.timings.duration >= HANG_MS) hangs.add(1);
   if (ready.status === 200) readyUp.add(1);
   else readyDown.add(1);
+  if (inRecoveryWindow) {
+    recoveryChecks.add(1);
+    if (ready.status !== 200) recoveryFailures.add(1);
+  }
 
   // Log in opportunistically; auth also needs the DB, so it may fail during the
   // outage — that is acceptable here and is not a domain error.
-  if (!loggedIn) loggedIn = login(BASE, user, IP_HEADER, { loginDuration: readyDuration, domainErrors: crashes });
+  if (!loggedIn) loggedIn = login(BASE, user, IP_HEADER, { loginDuration: readyDuration });
+  if (inRecoveryWindow && !loggedIn) recoveryFailures.add(1);
 
   if (loggedIn) {
     const album = http.get(`${BASE}/api/collections/${user.collectionId}/stickers`, {
@@ -90,6 +119,7 @@ export default function () {
     if (album.timings.duration >= HANG_MS) hangs.add(1);
     if (album.status === 200) albumUp.add(1);
     else albumDown.add(1);
+    if (inRecoveryWindow && album.status !== 200) recoveryFailures.add(1);
     // A failed request during the outage may have dropped the session; re-login next loop.
     if (album.status >= 500) loggedIn = false;
     check(album, { 'album view returns a bounded response': (r) => r.status !== 0 });

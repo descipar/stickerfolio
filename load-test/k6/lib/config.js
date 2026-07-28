@@ -27,16 +27,17 @@ export const strictThresholds = {
   quantity_update_duration: ['p(95)<200'],
   // Correctness invariants apply on every run, regardless of hardware.
   domain_errors: ['count<1'],
-  lost_updates: ['count<1'],
+  write_consistency_errors: ['count<1'],
   http_req_failed: ['rate<0.01'],
   checks: ['rate>0.99'],
 };
 
 // Smoke thresholds prove the script executes end-to-end and that no domain
-// error / lost update occurs, WITHOUT gating on the hardware-specific p95s.
+// error / read-after-write consistency error occurs, WITHOUT gating on the
+// hardware-specific p95s.
 export const smokeThresholds = {
   domain_errors: ['count<1'],
-  lost_updates: ['count<1'],
+  write_consistency_errors: ['count<1'],
   checks: ['rate>0.99'],
 };
 

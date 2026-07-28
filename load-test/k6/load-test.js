@@ -12,7 +12,7 @@
  *
  * Correctness guards (hardware-independent):
  *   - domain_errors: any unexpected non-2xx from a domain endpoint.
- *   - lost_updates:  read-after-write mismatch on a quantity update.
+ *   - write_consistency_errors: read-after-write mismatch on a quantity update.
  *
  * The dataset (credentials, collection ids, sections) is produced by
  * load-test/seed/seed-load-dataset.ts into load-test/data/users.json.
@@ -51,7 +51,7 @@ const metrics = {
   quantityUpdateDuration: new Trend('quantity_update_duration', true),
   tradeMatchingDuration: new Trend('trade_matching_duration', true),
   domainErrors: new Counter('domain_errors'),
-  lostUpdates: new Counter('lost_updates'),
+  writeConsistencyErrors: new Counter('write_consistency_errors'),
 };
 
 export const options = {
@@ -125,10 +125,10 @@ function quantityUpdate(user) {
     return;
   }
 
-  // Read-after-write consistency guard. Each VU only mutates its OWN holdings
-  // (server derives ownership from the session and locks the row FOR UPDATE),
-  // so a mismatch here signals a genuine lost update / consistency bug rather
-  // than expected cross-user contention. Sampled to limit extra read load.
+  // Read-after-write consistency guard. Each VU only mutates its OWN holdings,
+  // so this verifies persistence and isolation across collectors. It does not
+  // claim to test concurrent writes to the same holding. Sampled to limit extra
+  // read load.
   if (IS_SMOKE || Math.random() < 0.2) {
     const verify = http.get(`${BASE}/api/collections/${user.collectionId}/stickers`, {
       ...reqHeaders(),
@@ -144,7 +144,7 @@ function quantityUpdate(user) {
       const observed = found ? found.quantity : 0; // quantity 0 => no holding row
       const consistent = observed === quantity;
       check(verify, { 'read-after-write consistent': () => consistent });
-      if (!consistent) metrics.lostUpdates.add(1);
+      if (!consistent) metrics.writeConsistencyErrors.add(1);
       stickerCache = verify.json('stickers');
     }
   }
