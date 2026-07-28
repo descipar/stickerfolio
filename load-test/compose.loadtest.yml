@@ -1,0 +1,12 @@
+# Load-test overlay for compose.yml. It ONLY publishes the PostgreSQL port so a
+# seed process running outside the containers (e.g. the CI runner or a laptop)
+# can provision the dataset with the app's own tsx scripts. It changes nothing
+# about the app service and is never used by the normal deployment.
+#
+# Usage:
+#   docker compose -f compose.yml -f load-test/compose.loadtest.yml up -d --build
+name: stickerfolio
+services:
+  postgres:
+    ports:
+      - "5432:5432"

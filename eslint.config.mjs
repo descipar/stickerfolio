@@ -85,5 +85,14 @@ export default defineConfig([
       ],
     },
   },
-  globalIgnores([".next/**", "out/**", "build/**", "next-env.d.ts", "e2e/**", "playwright.config.ts"]),
+  globalIgnores([
+    ".next/**",
+    "out/**",
+    "build/**",
+    "next-env.d.ts",
+    "e2e/**",
+    "playwright.config.ts",
+    "load-test/k6/**",
+    "load-test/data/**",
+  ]),
 ]);

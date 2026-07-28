@@ -1,0 +1,256 @@
+# EXPLAIN ANALYZE — Stickerfolio critical queries
+# Generated: 2026-07-21T09:53:40.350Z
+# Collection: 8a2ad5d2-38a1-4aa3-ba51-c95150e48f7b  Collector: 2ea241e0-4bcd-48a7-a8ea-95bf2fcf1eaf
+# PostgreSQL 18.4 on aarch64-unknown-linux-gnu, compiled by gcc (Ubuntu/Linaro 7.5.0-3ubuntu1~18.04) 7.5.0, 64-bit
+
+==================================================================
+1) Album view (target p95 < 400 ms)
+==================================================================
+Sort  (cost=40.61..40.62 rows=4 width=168) (actual time=2.037..2.072 rows=994.00 loops=1)
+  Output: rs.sticker_id, rs.code, rs.label, rs.section_id, s.code, s.name, rs.sort_order, (COALESCE((h.quantity)::integer, 0))
+  Sort Key: rs.sort_order
+  Sort Method: quicksort  Memory: 105kB
+  Buffers: shared hit=5725
+  ->  Nested Loop Left Join  (cost=5.01..40.57 rows=4 width=168) (actual time=0.142..1.813 rows=994.00 loops=1)
+        Output: rs.sticker_id, rs.code, rs.label, rs.section_id, s.code, s.name, rs.sort_order, COALESCE((h.quantity)::integer, 0)
+        Inner Unique: true
+        Buffers: shared hit=5722
+        ->  Nested Loop  (cost=4.60..23.10 rows=4 width=180) (actual time=0.121..0.826 rows=994.00 loops=1)
+              Output: c.id, rs.sticker_id, rs.code, rs.label, rs.section_id, rs.sort_order, s.code, s.name
+              Inner Unique: true
+              Buffers: shared hit=2019
+              ->  Nested Loop  (cost=4.45..22.16 rows=4 width=116) (actual time=0.106..0.269 rows=994.00 loops=1)
+                    Output: c.id, rs.sticker_id, rs.code, rs.label, rs.section_id, rs.sort_order
+                    Buffers: shared hit=31
+                    ->  Index Scan using collections_trade_candidates_idx on public.collections c  (cost=0.14..8.18 rows=1 width=32) (actual time=0.015..0.016 rows=1.00 loops=1)
+                          Output: c.id, c.collector_id, c.album_id, c.revision_id, c.status, c.created_at, c.updated_at
+                          Index Cond: (c.collector_id = '2ea241e0-4bcd-48a7-a8ea-95bf2fcf1eaf'::uuid)
+                          Filter: (c.id = '8a2ad5d2-38a1-4aa3-ba51-c95150e48f7b'::uuid)
+                          Index Searches: 1
+                          Buffers: shared hit=5
+                    ->  Bitmap Heap Scan on public.album_revision_stickers rs  (cost=4.31..13.94 rows=4 width=116) (actual time=0.090..0.159 rows=994.00 loops=1)
+                          Output: rs.album_id, rs.revision_id, rs.sticker_id, rs.section_id, rs.code, rs.label, rs.sort_order
+                          Recheck Cond: (rs.revision_id = c.revision_id)
+                          Heap Blocks: exact=14
+                          Buffers: shared hit=26
+                          ->  Bitmap Index Scan on album_revision_stickers_section_idx  (cost=0.00..4.31 rows=4 width=0) (actual time=0.078..0.078 rows=994.00 loops=1)
+                                Index Cond: (rs.revision_id = c.revision_id)
+                                Index Searches: 1
+                                Buffers: shared hit=12
+              ->  Index Scan using album_sections_pkey on public.album_sections s  (cost=0.15..0.23 rows=1 width=80) (actual time=0.000..0.000 rows=1.00 loops=994)
+                    Output: s.id, s.album_id, s.revision_id, s.code, s.name, s.sort_order
+                    Index Cond: (s.id = rs.section_id)
+                    Index Searches: 994
+                    Buffers: shared hit=1988
+        ->  Index Scan using holdings_pkey on public.holdings h  (cost=0.41..4.36 rows=1 width=34) (actual time=0.001..0.001 rows=0.73 loops=994)
+              Output: h.collection_id, h.album_id, h.revision_id, h.sticker_id, h.quantity, h.updated_at
+              Index Cond: ((h.collection_id = '8a2ad5d2-38a1-4aa3-ba51-c95150e48f7b'::uuid) AND (h.sticker_id = rs.sticker_id))
+              Index Searches: 994
+              Buffers: shared hit=3703
+Planning:
+  Buffers: shared hit=141
+Planning Time: 0.453 ms
+Execution Time: 2.146 ms
+
+==================================================================
+1b) Missing anti-join
+==================================================================
+Sort  (cost=37.63..37.64 rows=2 width=136) (actual time=1.445..1.458 rows=273.00 loops=1)
+  Output: rs.code, rs.label, s.code, s.name, s.sort_order, rs.sort_order
+  Sort Key: s.sort_order, rs.sort_order, rs.code
+  Sort Method: quicksort  Memory: 38kB
+  Buffers: shared hit=4280
+  ->  Nested Loop  (cost=5.01..37.62 rows=2 width=136) (actual time=0.060..1.382 rows=273.00 loops=1)
+        Output: rs.code, rs.label, s.code, s.name, s.sort_order, rs.sort_order
+        Inner Unique: true
+        Buffers: shared hit=4277
+        ->  Nested Loop Anti Join  (cost=4.86..37.15 rows=2 width=84) (actual time=0.058..1.217 rows=273.00 loops=1)
+              Output: rs.code, rs.label, rs.sort_order, rs.section_id
+              Buffers: shared hit=3731
+              ->  Nested Loop  (cost=4.45..22.16 rows=4 width=116) (actual time=0.051..0.236 rows=994.00 loops=1)
+                    Output: c.id, rs.code, rs.label, rs.sort_order, rs.section_id, rs.sticker_id
+                    Buffers: shared hit=28
+                    ->  Index Scan using collections_trade_candidates_idx on public.collections c  (cost=0.14..8.18 rows=1 width=32) (actual time=0.005..0.006 rows=1.00 loops=1)
+                          Output: c.id, c.collector_id, c.album_id, c.revision_id, c.status, c.created_at, c.updated_at
+                          Index Cond: (c.collector_id = '2ea241e0-4bcd-48a7-a8ea-95bf2fcf1eaf'::uuid)
+                          Filter: (c.id = '8a2ad5d2-38a1-4aa3-ba51-c95150e48f7b'::uuid)
+                          Index Searches: 1
+                          Buffers: shared hit=2
+                    ->  Bitmap Heap Scan on public.album_revision_stickers rs  (cost=4.31..13.94 rows=4 width=116) (actual time=0.045..0.118 rows=994.00 loops=1)
+                          Output: rs.album_id, rs.revision_id, rs.sticker_id, rs.section_id, rs.code, rs.label, rs.sort_order
+                          Recheck Cond: (rs.revision_id = c.revision_id)
+                          Heap Blocks: exact=14
+                          Buffers: shared hit=26
+                          ->  Bitmap Index Scan on album_revision_stickers_section_idx  (cost=0.00..4.31 rows=4 width=0) (actual time=0.033..0.033 rows=994.00 loops=1)
+                                Index Cond: (rs.revision_id = c.revision_id)
+                                Index Searches: 1
+                                Buffers: shared hit=12
+              ->  Index Only Scan using holdings_pkey on public.holdings h  (cost=0.41..4.36 rows=1 width=32) (actual time=0.001..0.001 rows=0.73 loops=994)
+                    Output: h.collection_id, h.sticker_id
+                    Index Cond: ((h.collection_id = '8a2ad5d2-38a1-4aa3-ba51-c95150e48f7b'::uuid) AND (h.sticker_id = rs.sticker_id))
+                    Heap Fetches: 721
+                    Index Searches: 994
+                    Buffers: shared hit=3703
+        ->  Index Scan using album_sections_pkey on public.album_sections s  (cost=0.15..0.23 rows=1 width=84) (actual time=0.000..0.000 rows=1.00 loops=273)
+              Output: s.id, s.album_id, s.revision_id, s.code, s.name, s.sort_order
+              Index Cond: (s.id = rs.section_id)
+              Index Searches: 273
+              Buffers: shared hit=546
+Planning:
+  Buffers: shared hit=5
+Planning Time: 0.210 ms
+Execution Time: 1.561 ms
+
+==================================================================
+2) Duplicates (quantity > 1)
+==================================================================
+Sort  (cost=39.94..39.94 rows=1 width=140) (actual time=1.562..1.568 rows=156.00 loops=1)
+  Output: rs.code, rs.label, s.code, s.name, (COALESCE((h.quantity)::integer, 0)), s.sort_order, rs.sort_order
+  Sort Key: s.sort_order, rs.sort_order, rs.code
+  Sort Method: quicksort  Memory: 33kB
+  Buffers: shared hit=4043
+  ->  Nested Loop  (cost=5.02..39.93 rows=1 width=140) (actual time=0.054..1.529 rows=156.00 loops=1)
+        Output: rs.code, rs.label, s.code, s.name, COALESCE((h.quantity)::integer, 0), s.sort_order, rs.sort_order
+        Inner Unique: true
+        Buffers: shared hit=4043
+        ->  Nested Loop  (cost=4.87..39.69 rows=1 width=86) (actual time=0.051..1.426 rows=156.00 loops=1)
+              Output: rs.code, rs.label, rs.sort_order, rs.section_id, h.quantity
+              Inner Unique: true
+              Buffers: shared hit=3731
+              ->  Nested Loop  (cost=4.45..22.16 rows=4 width=116) (actual time=0.039..0.208 rows=994.00 loops=1)
+                    Output: c.id, rs.code, rs.label, rs.sort_order, rs.section_id, rs.sticker_id
+                    Buffers: shared hit=28
+                    ->  Index Scan using collections_trade_candidates_idx on public.collections c  (cost=0.14..8.18 rows=1 width=32) (actual time=0.005..0.005 rows=1.00 loops=1)
+                          Output: c.id, c.collector_id, c.album_id, c.revision_id, c.status, c.created_at, c.updated_at
+                          Index Cond: (c.collector_id = '2ea241e0-4bcd-48a7-a8ea-95bf2fcf1eaf'::uuid)
+                          Filter: (c.id = '8a2ad5d2-38a1-4aa3-ba51-c95150e48f7b'::uuid)
+                          Index Searches: 1
+                          Buffers: shared hit=2
+                    ->  Bitmap Heap Scan on public.album_revision_stickers rs  (cost=4.31..13.94 rows=4 width=116) (actual time=0.033..0.099 rows=994.00 loops=1)
+                          Output: rs.album_id, rs.revision_id, rs.sticker_id, rs.section_id, rs.code, rs.label, rs.sort_order
+                          Recheck Cond: (rs.revision_id = c.revision_id)
+                          Heap Blocks: exact=14
+                          Buffers: shared hit=26
+                          ->  Bitmap Index Scan on album_revision_stickers_section_idx  (cost=0.00..4.31 rows=4 width=0) (actual time=0.024..0.024 rows=994.00 loops=1)
+                                Index Cond: (rs.revision_id = c.revision_id)
+                                Index Searches: 1
+                                Buffers: shared hit=12
+              ->  Memoize  (cost=0.42..4.37 rows=1 width=34) (actual time=0.001..0.001 rows=0.16 loops=994)
+                    Output: h.quantity, h.collection_id, h.sticker_id
+                    Cache Key: rs.sticker_id
+                    Cache Mode: logical
+                    Hits: 0  Misses: 994  Evictions: 0  Overflows: 0  Memory Usage: 88kB
+                    Buffers: shared hit=3703
+                    ->  Index Scan using holdings_pkey on public.holdings h  (cost=0.41..4.36 rows=1 width=34) (actual time=0.001..0.001 rows=0.16 loops=994)
+                          Output: h.quantity, h.collection_id, h.sticker_id
+                          Index Cond: ((h.collection_id = '8a2ad5d2-38a1-4aa3-ba51-c95150e48f7b'::uuid) AND (h.sticker_id = rs.sticker_id))
+                          Filter: (h.quantity > 1)
+                          Rows Removed by Filter: 1
+                          Index Searches: 994
+                          Buffers: shared hit=3703
+        ->  Index Scan using album_sections_pkey on public.album_sections s  (cost=0.15..0.23 rows=1 width=84) (actual time=0.000..0.000 rows=1.00 loops=156)
+              Output: s.id, s.album_id, s.revision_id, s.code, s.name, s.sort_order
+              Index Cond: (s.id = rs.section_id)
+              Index Searches: 156
+              Buffers: shared hit=312
+Planning:
+  Buffers: shared hit=3
+Planning Time: 0.222 ms
+Execution Time: 1.613 ms
+
+==================================================================
+3) Trade matching (target p95 < 1 s)
+==================================================================
+Sort  (cost=69.30..69.31 rows=1 width=252) (actual time=223.337..223.454 rows=3622.00 loops=1)
+  Output: partner.collector_id, profile.display_name, owner_sticker.sticker_id, owner_sticker.code, partner_sticker.code, owner_sticker.label, section.id, section.code, section.name, (COALESCE((owner_holding.quantity)::integer, 0)), (COALESCE((partner_holding.quantity)::integer, 0)), owner_sticker.sort_order
+  Sort Key: profile.display_name, partner.collector_id, owner_sticker.sort_order, owner_sticker.sticker_id
+  Sort Method: quicksort  Memory: 548kB
+  Buffers: shared hit=601539
+  ->  Nested Loop Left Join  (cost=6.14..69.29 rows=1 width=252) (actual time=0.105..219.314 rows=3622.00 loops=1)
+        Output: partner.collector_id, profile.display_name, owner_sticker.sticker_id, owner_sticker.code, partner_sticker.code, owner_sticker.label, section.id, section.code, section.name, COALESCE((owner_holding.quantity)::integer, 0), COALESCE((partner_holding.quantity)::integer, 0), owner_sticker.sort_order
+        Inner Unique: true
+        Filter: (((owner_holding.sticker_id IS NULL) AND (partner_holding.quantity > 1)) OR ((owner_holding.quantity > 1) AND (partner_holding.sticker_id IS NULL)))
+        Rows Removed by Filter: 40114
+        Buffers: shared hit=601536
+        ->  Nested Loop Left Join  (cost=5.73..60.84 rows=1 width=294) (actual time=0.091..153.704 rows=43736.00 loops=1)
+              Output: partner.collector_id, partner.id, profile.display_name, owner_sticker.sticker_id, owner_sticker.code, owner_sticker.label, owner_sticker.sort_order, partner_sticker.code, partner_sticker.sticker_id, section.id, section.code, section.name, owner_holding.quantity, owner_holding.sticker_id
+              Inner Unique: true
+              Buffers: shared hit=438826
+              ->  Nested Loop  (cost=5.31..56.47 rows=1 width=292) (actual time=0.087..108.797 rows=43736.00 loops=1)
+                    Output: owner.id, partner.collector_id, partner.id, profile.display_name, owner_sticker.sticker_id, owner_sticker.code, owner_sticker.label, owner_sticker.sort_order, partner_sticker.code, partner_sticker.sticker_id, section.id, section.code, section.name
+                    Inner Unique: true
+                    Buffers: shared hit=275894
+                    ->  Nested Loop  (cost=5.16..56.24 rows=1 width=228) (actual time=0.084..81.404 rows=43736.00 loops=1)
+                          Output: owner.id, partner.collector_id, partner.id, profile.display_name, owner_sticker.sticker_id, owner_sticker.code, owner_sticker.label, owner_sticker.sort_order, owner_sticker.section_id, partner_sticker.code, partner_sticker.sticker_id
+                          Inner Unique: true
+                          Buffers: shared hit=188422
+                          ->  Nested Loop  (cost=5.01..56.01 rows=1 width=212) (actual time=0.075..51.791 rows=43736.00 loops=1)
+                                Output: owner.id, partner.collector_id, partner.id, partner_preference.collector_id, owner_sticker.sticker_id, owner_sticker.code, owner_sticker.label, owner_sticker.sort_order, owner_sticker.section_id, partner_sticker.code, partner_sticker.sticker_id
+                                Inner Unique: true
+                                Buffers: shared hit=100950
+                                ->  Nested Loop  (cost=4.87..49.16 rows=1 width=196) (actual time=0.058..19.479 rows=48706.00 loops=1)
+                                      Output: owner.id, partner.collector_id, partner.id, owner_sticker.sticker_id, owner_sticker.code, owner_sticker.label, owner_sticker.sort_order, owner_sticker.section_id, partner_sticker.code, partner_sticker.sticker_id
+                                      Join Filter: ((partner.collector_id <> owner.collector_id) AND (owner.album_id = partner.album_id))
+                                      Rows Removed by Join Filter: 994
+                                      Buffers: shared hit=8508
+                                      ->  Nested Loop  (cost=4.72..45.56 rows=14 width=212) (actual time=0.051..4.166 rows=994.00 loops=1)
+                                            Output: owner.album_id, owner.collector_id, owner.id, owner_sticker.sticker_id, owner_sticker.code, owner_sticker.label, owner_sticker.sort_order, owner_sticker.section_id, partner_sticker.code, partner_sticker.revision_id, partner_sticker.sticker_id
+                                            Buffers: shared hit=6520
+                                            ->  Nested Loop  (cost=4.45..22.16 rows=4 width=148) (actual time=0.043..0.392 rows=994.00 loops=1)
+                                                  Output: owner.album_id, owner.collector_id, owner.id, owner_sticker.sticker_id, owner_sticker.code, owner_sticker.label, owner_sticker.sort_order, owner_sticker.section_id
+                                                  Buffers: shared hit=28
+                                                  ->  Index Scan using collections_trade_candidates_idx on public.collections owner  (cost=0.14..8.18 rows=1 width=64) (actual time=0.005..0.006 rows=1.00 loops=1)
+                                                        Output: owner.id, owner.collector_id, owner.album_id, owner.revision_id, owner.status, owner.created_at, owner.updated_at
+                                                        Index Cond: (owner.collector_id = '2ea241e0-4bcd-48a7-a8ea-95bf2fcf1eaf'::uuid)
+                                                        Filter: (owner.id = '8a2ad5d2-38a1-4aa3-ba51-c95150e48f7b'::uuid)
+                                                        Index Searches: 1
+                                                        Buffers: shared hit=2
+                                                  ->  Bitmap Heap Scan on public.album_revision_stickers owner_sticker  (cost=4.31..13.94 rows=4 width=116) (actual time=0.037..0.176 rows=994.00 loops=1)
+                                                        Output: owner_sticker.album_id, owner_sticker.revision_id, owner_sticker.sticker_id, owner_sticker.section_id, owner_sticker.code, owner_sticker.label, owner_sticker.sort_order
+                                                        Recheck Cond: (owner_sticker.revision_id = owner.revision_id)
+                                                        Heap Blocks: exact=14
+                                                        Buffers: shared hit=26
+                                                        ->  Bitmap Index Scan on album_revision_stickers_section_idx  (cost=0.00..4.31 rows=4 width=0) (actual time=0.030..0.031 rows=994.00 loops=1)
+                                                              Index Cond: (owner_sticker.revision_id = owner.revision_id)
+                                                              Index Searches: 1
+                                                              Buffers: shared hit=12
+                                            ->  Index Scan using album_revision_stickers_album_id_revision_id_sticker_id_key on public.album_revision_stickers partner_sticker  (cost=0.28..5.81 rows=4 width=64) (actual time=0.002..0.003 rows=1.00 loops=994)
+                                                  Output: partner_sticker.album_id, partner_sticker.revision_id, partner_sticker.sticker_id, partner_sticker.section_id, partner_sticker.code, partner_sticker.label, partner_sticker.sort_order
+                                                  Index Cond: (partner_sticker.sticker_id = owner_sticker.sticker_id)
+                                                  Index Searches: 2748
+                                                  Buffers: shared hit=6492
+                                      ->  Index Scan using collections_trade_candidates_idx on public.collections partner  (cost=0.14..0.24 rows=1 width=64) (actual time=0.005..0.009 rows=50.00 loops=994)
+                                            Output: partner.id, partner.collector_id, partner.album_id, partner.revision_id, partner.status, partner.created_at, partner.updated_at
+                                            Index Cond: (partner.revision_id = partner_sticker.revision_id)
+                                            Index Searches: 994
+                                            Buffers: shared hit=1988
+                                ->  Index Only Scan using trading_preferences_visible_idx on public.trading_preferences partner_preference  (cost=0.14..6.83 rows=1 width=16) (actual time=0.000..0.000 rows=0.90 loops=48706)
+                                      Output: partner_preference.collector_id
+                                      Index Cond: (partner_preference.collector_id = partner.collector_id)
+                                      Heap Fetches: 43736
+                                      Index Searches: 48706
+                                      Buffers: shared hit=92442
+                          ->  Index Scan using collector_profiles_pkey on public.collector_profiles profile  (cost=0.15..0.23 rows=1 width=48) (actual time=0.000..0.000 rows=1.00 loops=43736)
+                                Output: profile.id, profile.display_name, profile.created_at, profile.updated_at, profile.user_id, profile.onboarding_completed_at
+                                Index Cond: (profile.id = partner_preference.collector_id)
+                                Index Searches: 43736
+                                Buffers: shared hit=87472
+                    ->  Index Scan using album_sections_pkey on public.album_sections section  (cost=0.15..0.23 rows=1 width=80) (actual time=0.000..0.000 rows=1.00 loops=43736)
+                          Output: section.id, section.album_id, section.revision_id, section.code, section.name, section.sort_order
+                          Index Cond: (section.id = owner_sticker.section_id)
+                          Index Searches: 43736
+                          Buffers: shared hit=87472
+              ->  Index Scan using holdings_pkey on public.holdings owner_holding  (cost=0.41..4.36 rows=1 width=34) (actual time=0.001..0.001 rows=0.73 loops=43736)
+                    Output: owner_holding.collection_id, owner_holding.album_id, owner_holding.revision_id, owner_holding.sticker_id, owner_holding.quantity, owner_holding.updated_at
+                    Index Cond: ((owner_holding.collection_id = '8a2ad5d2-38a1-4aa3-ba51-c95150e48f7b'::uuid) AND (owner_holding.sticker_id = owner_sticker.sticker_id))
+                    Index Searches: 43736
+                    Buffers: shared hit=162932
+        ->  Index Scan using holdings_pkey on public.holdings partner_holding  (cost=0.41..8.43 rows=1 width=34) (actual time=0.001..0.001 rows=0.72 loops=43736)
+              Output: partner_holding.collection_id, partner_holding.album_id, partner_holding.revision_id, partner_holding.sticker_id, partner_holding.quantity, partner_holding.updated_at
+              Index Cond: ((partner_holding.collection_id = partner.id) AND (partner_holding.sticker_id = partner_sticker.sticker_id))
+              Index Searches: 43736
+              Buffers: shared hit=162710
+Planning:
+  Buffers: shared hit=54
+Planning Time: 2.485 ms
+Execution Time: 223.653 ms
