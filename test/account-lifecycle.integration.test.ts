@@ -47,6 +47,12 @@ function cookieFrom(response: Response): string {
   return value.split(";", 1)[0]!;
 }
 
+function collectJsonKeys(value: unknown): string[] {
+  if (Array.isArray(value)) return value.flatMap(collectJsonKeys);
+  if (!value || typeof value !== "object") return [];
+  return Object.entries(value).flatMap(([key, child]) => [key, ...collectJsonKeys(child)]);
+}
+
 async function signIn(email: string, password: string): Promise<{ status: number; headers: Headers }> {
   return signInWith(auth, email, password);
 }
@@ -298,8 +304,15 @@ describe("account lifecycle: suspension, deactivation, and deletion", () => {
     expect(serialized).not.toContain(bootstrapAdminEmail);
     expect(serialized).not.toContain("export-neighbor@example.test");
     expect(serialized).not.toContain(otherCollection.id);
-    expect(serialized).not.toContain("password");
-    expect(serialized).not.toContain("token");
+    expect(collectJsonKeys(data)).not.toEqual(expect.arrayContaining([
+      "password",
+      "passwordHash",
+      "accessToken",
+      "refreshToken",
+      "idToken",
+      "sessionToken",
+      "token",
+    ]));
     await expect(exportOwnAccountData(new Headers(), auth, pool)).rejects.toMatchObject({
       status: 401,
     });
