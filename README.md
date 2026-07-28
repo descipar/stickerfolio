@@ -87,6 +87,12 @@ STICKERFOLIO_URL=http://192.168.20.102:3500 ./start.sh
 
 The application URL and bootstrap login are printed after startup. Running `./start.sh` again retains existing secrets and PostgreSQL data. Private-repository cloning, manual Compose setup, updates, external PostgreSQL, and platform notes are covered in [Deployment](docs/DEPLOYMENT.md).
 
+External production databases should use `DATABASE_SSL_MODE=verify-full` with
+the database provider's CA certificate. The weaker `require` mode encrypts the
+connection without verifying the server identity and therefore does not protect
+against a man-in-the-middle endpoint. See [Deployment](docs/DEPLOYMENT.md#external-postgresql)
+for the complete configuration and trusted-private-network exceptions.
+
 ## Local development
 
 Requirements:

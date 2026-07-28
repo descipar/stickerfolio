@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { createTestEnvironment } from "../../../test/create-test-environment";
-import { createPool } from "./pool";
+import { createPgClientConfig, createPool } from "./pool";
 
 describe("PostgreSQL pool errors", () => {
   afterEach(() => vi.restoreAllMocks());
@@ -18,5 +18,27 @@ describe("PostgreSQL pool errors", () => {
     expect(serialized).toContain("database.pool.idle-client-error");
     expect(serialized).not.toContain("user:secret");
     await pool.end();
+  });
+
+  it("keeps verified TLS strict and require mode explicitly unverified", () => {
+    const environment = createTestEnvironment(
+      "postgresql://user:secret@database.example.com:5432/stickerfolio",
+    );
+
+    const verified = createPgClientConfig({
+      ...environment.database,
+      sslMode: "verify-full",
+      certificateAuthority: "trusted provider CA",
+    });
+    expect(verified.ssl).toEqual({
+      rejectUnauthorized: true,
+      ca: "trusted provider CA",
+    });
+
+    const encryptedOnly = createPgClientConfig({
+      ...environment.database,
+      sslMode: "require",
+    });
+    expect(encryptedOnly.ssl).toEqual({ rejectUnauthorized: false });
   });
 });
