@@ -75,7 +75,10 @@ cd stickerfolio
 ./start.sh
 ```
 
-The helper creates private local secrets, builds the image, starts PostgreSQL and Stickerfolio, applies migrations, and loads the bundled empty catalogs. It does not create collector profiles, personal albums, or example holdings.
+The helper creates private local secrets, builds the standalone application and
+operations images, starts PostgreSQL and Stickerfolio, applies migrations, and
+loads the bundled empty catalogs. It does not create collector profiles,
+personal albums, or example holdings.
 
 If automatic address detection is unsuitable, set the externally used URL explicitly:
 

@@ -98,8 +98,11 @@ Then start the external deployment:
 docker compose --file compose.external.yml up --detach --build
 ```
 
-The external Compose variant builds the same image but defines no PostgreSQL
-container or database volume.
+The external Compose variant builds the same standalone application and
+operations images but defines no PostgreSQL container or database volume. The
+application image contains only the traced Next.js server and static assets.
+The separate operations image retains the TypeScript migration and seed tools;
+it is used by the short-lived `migrate` service and is not the web runtime.
 
 | Mode | Protection | Appropriate use |
 | --- | --- | --- |

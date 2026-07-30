@@ -96,7 +96,11 @@ Provider-specific services may later be added through optional adapters. The cor
 
 ### 5.1 Modular monolith
 
-Stickerfolio will be rebuilt as a modular monolith. UI, application logic, and HTTP interfaces live in one Next.js application and ship as one Docker image.
+Stickerfolio will be rebuilt as a modular monolith. UI, application logic, and
+HTTP interfaces live in one Next.js application and ship as one standalone
+application image. A separate short-lived operations image, built from the same
+Dockerfile and source revision, contains the migration and seed tooling without
+turning it into another service or domain deployment.
 
 Code is separated into domain modules:
 
@@ -156,7 +160,7 @@ The app container stores no indispensable data in its filesystem or memory. Acco
 #### Rationale
 
 - The container can be replaced safely during updates.
-- The same image can run locally or externally.
+- The same standalone application image can run locally or externally.
 - Backups are independent of container lifetime.
 - Multiple app instances remain possible later, but will require a shared rate-limit store.
 
@@ -202,7 +206,7 @@ Both deployment variants use:
 - the same data model,
 - the same migrations,
 - the same seeds,
-- the same Docker image,
+- the same standalone application and operations images,
 - the same backup and restore format.
 
 ### 6.3 Configuration and secrets

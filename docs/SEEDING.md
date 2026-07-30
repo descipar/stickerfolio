@@ -20,7 +20,7 @@ pnpm seed:euro2024
 In a bundled Compose deployment:
 
 ```bash
-docker compose run --rm app node node_modules/tsx/dist/cli.mjs scripts/seed-bundled-catalogs.ts
+docker compose run --rm migrate node node_modules/tsx/dist/cli.mjs scripts/seed-bundled-catalogs.ts
 ```
 
 Catalog seeds create shared templates, revisions, sections, and stable sticker identities. Repeating a seed does not overwrite an existing revision. Exact included catalog scope is documented in [Supported album catalogs](SUPPORTED_ALBUMS.md).
@@ -38,7 +38,7 @@ pnpm seed:example-holdings -- --collector <profile-uuid> --dataset wm2026-exampl
 For Compose:
 
 ```bash
-docker compose run --rm app node node_modules/tsx/dist/cli.mjs scripts/seed-example-holdings.ts \
+docker compose run --rm migrate node node_modules/tsx/dist/cli.mjs scripts/seed-example-holdings.ts \
   --collector <profile-uuid> \
   --dataset wm2026-example
 ```
@@ -46,3 +46,6 @@ docker compose run --rm app node node_modules/tsx/dist/cli.mjs scripts/seed-exam
 Existing holding rows are never overwritten. An unknown profile, missing catalog revision, or personal collection pinned to a different revision aborts the transaction without partial changes.
 
 All seed commands use `DATABASE_URL`, so bundled and external PostgreSQL installations follow the same data path.
+The Compose `migrate` service uses the separate operations image that contains
+the migration and seed tooling. The running application image contains only the
+traced standalone server and its static assets.
