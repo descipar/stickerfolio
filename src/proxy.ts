@@ -9,6 +9,7 @@ import {
 } from "@/infrastructure/http";
 
 const invitationRedemptionLimiter = new InMemoryFixedWindowRateLimiter();
+const publicShareLimiter = new InMemoryFixedWindowRateLimiter();
 
 export function proxy(request: Request): Response {
   const environment = getEnvironment();
@@ -18,6 +19,23 @@ export function proxy(request: Request): Response {
   }
 
   const url = new URL(request.url);
+  if (request.method === "GET" && url.pathname.startsWith("/share/")) {
+    const decision = publicShareLimiter.consume(
+      `public-share:${getRateLimitClientKey(request, environment.auth.trustedIpHeader)}`,
+      120,
+      60_000,
+    );
+    if (!decision.allowed) {
+      return new NextResponse("Too many requests. Please try again later.", {
+        status: 429,
+        headers: {
+          "Content-Type": "text/plain; charset=utf-8",
+          "Retry-After": String(decision.retryAfterSeconds),
+        },
+      });
+    }
+  }
+
   if (request.method === "POST" && url.pathname === "/api/invitations/redeem") {
     const decision = invitationRedemptionLimiter.consume(
       getRateLimitClientKey(request, environment.auth.trustedIpHeader),
@@ -40,4 +58,4 @@ export function proxy(request: Request): Response {
   return NextResponse.next({ request: { headers: requestHeaders } });
 }
 
-export const config = { matcher: "/api/:path*" };
+export const config = { matcher: ["/api/:path*", "/share/:path*"] };

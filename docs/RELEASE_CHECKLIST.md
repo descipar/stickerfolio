@@ -56,7 +56,7 @@ Before tagging a release, run and record evidence for:
 
 - **Email verification is off** in the MVP (Roadmap §8.3); open self-registration is a deliberate per-deployment decision and defaults to `closed`.
 - **Complete self-service account export** is not shipped; account deletion surfaces the per-collection CSV lists (#68) as an export-first step, and the full portable export is tracked as **#88** (deliberate §35 scope decision).
-- **Single app instance** only; the login/registration rate limiter is per-process (Roadmap §10.2) — a shared limiter is required before horizontal scaling.
+- **Single app instance** only; login, registration, and public-share rate limiters are per-process (Roadmap §10.2) — a shared limiter is required before horizontal scaling.
 - **Bootstrap admin** uses a fixed initial password mitigated by a forced first-login change (randomization was considered and declined in #62).
 
 ## Remaining before release

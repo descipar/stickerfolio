@@ -30,3 +30,22 @@ export {
   type CollectionsOverview,
   type OnboardingResult,
 } from "./access";
+export {
+  collectionShareScopes,
+  createCollectionShare,
+  createOwnCollectionShare,
+  getOwnCollectionShares,
+  isCollectionShareToken,
+  listCollectionShares,
+  loadSharedCollection,
+  revokeCollectionShare,
+  revokeOwnCollectionShare,
+  updateCollectionShare,
+  updateOwnCollectionShare,
+  type CollectionShareScope,
+  type CollectionShareStatus,
+  type CollectionShareSummary,
+  type SharedCollection,
+  type SharedSection,
+  type SharedSticker,
+} from "./sharing";

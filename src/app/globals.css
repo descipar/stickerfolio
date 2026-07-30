@@ -261,6 +261,41 @@ button:disabled { cursor: wait; opacity: 0.55; }
 
 .collection-export { display: flex; flex-wrap: wrap; gap: 0.65rem; }
 .collection-export > * { flex: 1 1 13rem; text-align: center; }
+.sharing-panel { display: grid; gap: 1rem; }
+.sharing-panel .section-heading { margin-bottom: 0; }
+.sharing-panel h2, .sharing-panel h3, .sharing-panel p { margin-bottom: 0; }
+.share-create-grid { display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr) auto; align-items: end; gap: 0.75rem; }
+.share-create-grid label, .created-share label { display: grid; gap: 0.4rem; color: var(--muted); font-size: 0.84rem; font-weight: 750; }
+.share-create-grid button { min-height: 48px; }
+.created-share { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: end; gap: 0.75rem; padding: 0.9rem; border-radius: 0.85rem; background: var(--accent-soft); }
+.created-share input { background: var(--surface); font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 0.78rem; }
+.share-list { display: grid; gap: 0.7rem; padding-top: 0.25rem; }
+.share-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 1rem; padding: 0.85rem; border: 1px solid var(--border); border-radius: 0.85rem; background: var(--surface-soft); }
+.share-row > div:first-child { min-width: 0; display: flex; flex-wrap: wrap; align-items: center; gap: 0.35rem 0.6rem; }
+.share-row > div:first-child > strong { flex: 1 1 100%; }
+.share-row > div:first-child > span { color: var(--muted); font-size: 0.78rem; }
+.share-actions { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 0.5rem; }
+.share-actions select { width: auto; min-width: 8.5rem; }
+.share-actions button { min-width: 6.5rem; }
+.status-badge.active, .status-badge.duplicate { background: var(--success-soft); color: var(--success); }
+.status-badge.expired, .status-badge.revoked, .status-badge.missing { background: var(--danger-soft); color: var(--danger); }
+
+.shared-page { max-width: 52rem; gap: 1.4rem; }
+.shared-header { display: flex; align-items: center; justify-content: space-between; gap: 1rem; }
+.shared-hero { padding-top: 0.5rem; }
+.shared-hero h1 { margin-bottom: 0.65rem; font-size: clamp(2.25rem, 9vw, 4.5rem); line-height: 0.98; letter-spacing: -0.055em; }
+.shared-hero p:last-child { color: var(--muted); }
+.shared-page .collection-stat-grid { grid-template-columns: repeat(auto-fit, minmax(9rem, 1fr)); }
+.shared-sections { display: grid; gap: 1rem; }
+.shared-section { display: grid; gap: 1rem; }
+.shared-section > header { display: flex; align-items: end; justify-content: space-between; gap: 1rem; }
+.shared-section h2, .shared-section p { margin-bottom: 0; }
+.shared-sticker-list { display: grid; gap: 0.5rem; margin: 0; padding: 0; list-style: none; }
+.shared-sticker-list li { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 0.75rem; padding: 0.7rem 0.8rem; border-radius: 0.75rem; background: var(--surface-soft); }
+.shared-sticker-list li > span:first-child { min-width: 0; display: grid; gap: 0.12rem; }
+.shared-sticker-list strong, .shared-sticker-list small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.shared-sticker-list small { color: var(--muted); }
+.shared-footer { padding: 1rem 0; color: var(--muted); font-size: 0.82rem; line-height: 1.5; text-align: center; }
 .trade-view { gap: 1.5rem; }
 .trade-filters { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0.8rem; }
 .trade-filters label { display: grid; gap: 0.4rem; color: var(--muted); font-size: 0.82rem; font-weight: 750; }
@@ -346,6 +381,10 @@ button:disabled { cursor: wait; opacity: 0.55; }
   .trade-sticker-list li { grid-template-columns: minmax(0, 1fr) auto; }
   .partner-code { grid-column: 1; }
   .spare-count { grid-column: 2; grid-row: 1 / span 2; }
+  .share-create-grid { grid-template-columns: 1fr; }
+  .created-share, .share-row { grid-template-columns: 1fr; }
+  .share-actions { justify-content: stretch; }
+  .share-actions > * { flex: 1 1 8rem; }
 }
 
 @media (max-width: 22rem) {
