@@ -52,7 +52,9 @@ exports, or audit events. Public views reveal only the selected missing and/or
 duplicate entries for one collection. Unknown, expired, and revoked tokens all
 resolve to the same not-found response. Share responses are non-cacheable,
 carry `noindex` directives, and use a `no-referrer` policy so the capability
-token is not leaked through outgoing navigation.
+token is not leaked through outgoing navigation. Link creation additionally
+requires an explicit `PUBLIC_SHARE_BASE_URL`; localhost and loopback origins are
+rejected.
 
 The complete account-data export is also owner-scoped from the authenticated
 session. It includes only non-sensitive account fields and the owner's profile,

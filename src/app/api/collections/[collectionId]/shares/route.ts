@@ -28,7 +28,13 @@ export async function GET(
   }
   try {
     const shares = await getOwnCollectionShares(request.headers, collectionId.data);
-    return NextResponse.json({ shares }, { headers: privateHeaders });
+    return NextResponse.json(
+      {
+        shares,
+        sharingEnabled: getEnvironment().publicShareBaseUrl !== null,
+      },
+      { headers: privateHeaders },
+    );
   } catch (error) {
     return apiError(error);
   }
@@ -50,6 +56,15 @@ export async function POST(
   }
 
   try {
+    const publicShareBaseUrl = getEnvironment().publicShareBaseUrl;
+    if (!publicShareBaseUrl) {
+      return NextResponse.json(
+        {
+          error: "Sharing is disabled until PUBLIC_SHARE_BASE_URL is configured.",
+        },
+        { status: 409, headers: privateHeaders },
+      );
+    }
     const created = await createOwnCollectionShare(
       request.headers,
       collectionId.data,
@@ -58,7 +73,7 @@ export async function POST(
     );
     const url = new URL(
       `/share/${created.token}`,
-      getEnvironment().appBaseUrl,
+      publicShareBaseUrl,
     ).toString();
     return NextResponse.json(
       { share: created.share, url },

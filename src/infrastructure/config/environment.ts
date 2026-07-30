@@ -11,6 +11,44 @@ const optionalText = z.preprocess(
   z.string().trim().optional(),
 );
 
+const optionalPublicShareBaseUrl = z.preprocess(
+  (value) => (typeof value === "string" && value.trim() === "" ? undefined : value),
+  z
+    .url({ error: "PUBLIC_SHARE_BASE_URL must be a valid URL" })
+    .superRefine((value, context) => {
+      const url = new URL(value);
+      if (!["http:", "https:"].includes(url.protocol)) {
+        context.addIssue({ code: "custom", message: "must use http or https" });
+      }
+      if (
+        url.username
+        || url.password
+        || url.pathname !== "/"
+        || url.search
+        || url.hash
+      ) {
+        context.addIssue({
+          code: "custom",
+          message: "must be an origin without credentials, path, query, or fragment",
+        });
+      }
+      const hostname = url.hostname.toLowerCase();
+      if (
+        hostname === "localhost"
+        || hostname === "::1"
+        || hostname === "[::1]"
+        || hostname === "0.0.0.0"
+        || /^127(?:\.\d{1,3}){3}$/.test(hostname)
+      ) {
+        context.addIssue({
+          code: "custom",
+          message: "must not use localhost or a loopback address",
+        });
+      }
+    })
+    .optional(),
+);
+
 const optionalHeaderName = z.preprocess(
   (value) => (typeof value === "string" && value.trim() === "" ? undefined : value),
   z
@@ -58,6 +96,7 @@ const environmentSchema = z
       .refine((value) => ["http:", "https:"].includes(new URL(value).protocol), {
         message: "APP_BASE_URL must use http or https",
       }),
+    PUBLIC_SHARE_BASE_URL: optionalPublicShareBaseUrl,
     BETTER_AUTH_SECRET: requiredText("BETTER_AUTH_SECRET").min(
       32,
       "BETTER_AUTH_SECRET must contain at least 32 characters",
@@ -116,6 +155,7 @@ export type DatabaseSslMode = (typeof databaseSslModes)[number];
 export interface AppEnvironment {
   nodeEnv: "development" | "test" | "production";
   appBaseUrl: URL;
+  publicShareBaseUrl: URL | null;
   registrationMode: RegistrationMode;
   database: {
     url: string;
@@ -159,6 +199,9 @@ export function parseEnvironment(source: Record<string, string | undefined>): Ap
   return {
     nodeEnv: value.NODE_ENV,
     appBaseUrl: new URL(value.APP_BASE_URL),
+    publicShareBaseUrl: value.PUBLIC_SHARE_BASE_URL
+      ? new URL(value.PUBLIC_SHARE_BASE_URL)
+      : null,
     registrationMode: value.REGISTRATION_MODE,
     database: {
       url: value.DATABASE_URL,

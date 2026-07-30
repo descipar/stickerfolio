@@ -19,6 +19,10 @@ A quantity of zero means a sticker is missing, one means it is owned, and every 
 - self-service account settings, deactivation, and permanent deletion;
 - PostgreSQL persistence with bundled and external database options.
 
+Read-only sharing is off by default and requires an explicitly configured,
+recipient-reachable `PUBLIC_SHARE_BASE_URL`. Stickerfolio never generates
+recipient links pointing at localhost.
+
 Trade matching is read-only. It shows an opted-in partner's display name and only the sticker codes relevant to a possible exchange—never login addresses, unrelated holdings, or complete foreign collections. Viewing a result does not reserve stickers or claim that a trade occurred.
 
 Stickerfolio currently focuses on collection tracking, controlled list sharing,

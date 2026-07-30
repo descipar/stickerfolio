@@ -21,6 +21,7 @@ const scopeLabels: Record<ShareScope, string> = {
 
 export function CollectionSharing({ collectionId }: { collectionId: string }) {
   const [shares, setShares] = useState<ShareSummary[] | null>(null);
+  const [sharingEnabled, setSharingEnabled] = useState<boolean | null>(null);
   const [scope, setScope] = useState<ShareScope>("both");
   const [expirationDate, setExpirationDate] = useState("");
   const [createdUrl, setCreatedUrl] = useState("");
@@ -36,8 +37,12 @@ export function CollectionSharing({ collectionId }: { collectionId: string }) {
     void fetch(`/api/collections/${collectionId}/shares`, { cache: "no-store" })
       .then(async (response) => {
         if (!response.ok) throw new Error();
-        const data = await response.json() as { shares: ShareSummary[] };
+        const data = await response.json() as {
+          shares: ShareSummary[];
+          sharingEnabled: boolean;
+        };
         setShares(data.shares);
+        setSharingEnabled(data.sharingEnabled);
       })
       .catch(() => setError("Share links could not be loaded."));
     return () => window.clearTimeout(capabilityCheck);
@@ -151,28 +156,40 @@ export function CollectionSharing({ collectionId }: { collectionId: string }) {
         Links never allow quantity changes.
       </p>
 
-      <div className="share-create-grid">
-        <label>
-          Visible list
-          <select value={scope} onChange={(event) => setScope(event.target.value as ShareScope)}>
-            <option value="both">Missing stickers and duplicates</option>
-            <option value="missing">Missing stickers only</option>
-            <option value="duplicates">Duplicates only</option>
-          </select>
-        </label>
-        <label>
-          Expiration date <span className="field-hint">(optional, UTC)</span>
-          <input
-            type="date"
-            min={new Date().toISOString().slice(0, 10)}
-            value={expirationDate}
-            onChange={(event) => setExpirationDate(event.target.value)}
-          />
-        </label>
-        <button className="primary-button" type="button" disabled={pending} onClick={() => void createShare()}>
-          Create share link
-        </button>
-      </div>
+      {sharingEnabled === false ? (
+        <p className="state-message" role="status">
+          Sharing is unavailable on this installation. The administrator must
+          configure an externally reachable <code>PUBLIC_SHARE_BASE_URL</code>.
+        </p>
+      ) : (
+        <div className="share-create-grid">
+          <label>
+            Visible list
+            <select value={scope} onChange={(event) => setScope(event.target.value as ShareScope)}>
+              <option value="both">Missing stickers and duplicates</option>
+              <option value="missing">Missing stickers only</option>
+              <option value="duplicates">Duplicates only</option>
+            </select>
+          </label>
+          <label>
+            Expiration date <span className="field-hint">(optional, UTC)</span>
+            <input
+              type="date"
+              min={new Date().toISOString().slice(0, 10)}
+              value={expirationDate}
+              onChange={(event) => setExpirationDate(event.target.value)}
+            />
+          </label>
+          <button
+            className="primary-button"
+            type="button"
+            disabled={pending || sharingEnabled !== true}
+            onClick={() => void createShare()}
+          >
+            Create share link
+          </button>
+        </div>
+      )}
 
       {createdUrl ? (
         <div className="created-share" role="status">

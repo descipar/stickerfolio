@@ -40,6 +40,11 @@ date can stop access automatically. The complete link is shown only when it is
 created, so copy or share it immediately; Stickerfolio stores only a
 cryptographic hash of the secret token.
 
+Sharing is available only when the installation administrator has configured a
+recipient-reachable `PUBLIC_SHARE_BASE_URL`. A default localhost installation
+keeps creation disabled instead of producing a link that would point recipients
+back to their own devices.
+
 Recipients do not need an account. The mobile page contains only the album and
 revision context, section names, selected sticker codes and labels, and spare
 counts for duplicates. It does not expose the collector's login address,

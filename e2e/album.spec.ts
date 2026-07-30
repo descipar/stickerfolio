@@ -88,7 +88,8 @@ test.describe("album view", () => {
       viewport: { width: 390, height: 844 },
     });
     const publicPage = await publicContext.newPage();
-    const response = await publicPage.goto(url);
+    const tokenPath = new URL(url).pathname;
+    const response = await publicPage.goto(tokenPath);
     expect(response?.status()).toBe(200);
     expect(response?.headers()["cache-control"]).toContain("no-store");
     expect(response?.headers()["referrer-policy"]).toBe("no-referrer");
@@ -99,7 +100,7 @@ test.describe("album view", () => {
 
     await page.getByRole("button", { name: "Revoke", exact: true }).first().click();
     await expect(page.getByText("Share link revoked.")).toBeVisible();
-    const revoked = await publicPage.goto(url);
+    const revoked = await publicPage.goto(tokenPath);
     expect(revoked?.status()).toBe(404);
     await publicContext.close();
   });
