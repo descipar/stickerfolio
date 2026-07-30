@@ -55,9 +55,20 @@ jobs:
       - name: Verify application readiness and empty catalog availability
         run: |
           curl --fail --silent http://localhost:3500/api/health/ready
+          curl --fail --silent http://localhost:3500/api/version
           test "$(docker compose exec -T postgres psql --username stickerfolio --dbname stickerfolio --tuples-only --no-align --command "SELECT count(*) FROM albums WHERE slug = 'panini-world-cup-2026'")" = "1"
           test "$(docker compose exec -T postgres psql --username stickerfolio --dbname stickerfolio --tuples-only --no-align --command "SELECT count(*) FROM collector_profiles")" = "0"
           test "$(docker compose exec -T postgres psql --username stickerfolio --dbname stickerfolio --tuples-only --no-align --command "SELECT count(*) FROM holdings")" = "0"
+      - name: Verify standalone and operations image contents
+        run: |
+          docker run --rm --entrypoint sh stickerfolio:local -c \
+            'test -f /app/server.js && test ! -e /app/src && test ! -e /app/scripts && test ! -e /app/node_modules/tsx'
+          docker run --rm --entrypoint sh stickerfolio-operations:local -c \
+            'test -f /app/scripts/migrate.ts && test -d /app/src && test -f /app/node_modules/tsx/dist/cli.mjs'
+          app_size="$(docker image inspect stickerfolio:local --format '{{.Size}}')"
+          operations_size="$(docker image inspect stickerfolio-operations:local --format '{{.Size}}')"
+          test "$app_size" -lt "$operations_size"
+          printf 'Standalone runtime: %s bytes; operations image: %s bytes\n' "$app_size" "$operations_size"
       - name: Verify persistent data survives an app rebuild
         run: docker compose up -d --build app
       - name: Back up and restore into an empty database

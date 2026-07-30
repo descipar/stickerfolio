@@ -14,10 +14,10 @@ x-app-environment: &app-environment
 
 services:
   migrate:
-    image: stickerfolio:${STICKERFOLIO_TAG:-local}
+    image: stickerfolio-operations:${STICKERFOLIO_TAG:-local}
     build:
       context: .
-      target: runtime
+      target: operations
     command: ["node", "node_modules/tsx/dist/cli.mjs", "scripts/migrate.ts", "up"]
     environment: *app-environment
     restart: "no"

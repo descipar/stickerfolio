@@ -15,21 +15,30 @@ ENV DATABASE_URL="postgresql://build:build@localhost:5432/build"
 ENV APP_BASE_URL="http://localhost:3500"
 ENV BETTER_AUTH_SECRET="docker-build-only-secret-with-at-least-32-characters"
 ENV REGISTRATION_MODE="closed"
+RUN mkdir -p public
 RUN pnpm build
 
 FROM dependencies AS production-dependencies
 RUN pnpm prune --prod
 
-FROM node:22-alpine AS runtime
+FROM node:22-alpine AS operations
 ENV NODE_ENV="production"
-ENV HOSTNAME="0.0.0.0"
 WORKDIR /app
 COPY --from=production-dependencies --chown=node:node /app/node_modules ./node_modules
-COPY --from=build --chown=node:node /app/.next ./.next
-COPY --from=build --chown=node:node /app/package.json /app/tsconfig.json /app/next.config.ts ./
+COPY --from=build --chown=node:node /app/package.json /app/tsconfig.json ./
 COPY --from=build --chown=node:node /app/migrations ./migrations
 COPY --from=build --chown=node:node /app/scripts ./scripts
 COPY --from=build --chown=node:node /app/src ./src
 USER node
+
+FROM node:22-alpine AS runtime
+ENV NODE_ENV="production"
+ENV HOSTNAME="0.0.0.0"
+ENV PORT="3500"
+WORKDIR /app
+COPY --from=build --chown=node:node /app/.next/standalone ./
+COPY --from=build --chown=node:node /app/.next/static ./.next/static
+COPY --from=build --chown=node:node /app/public ./public
+USER node
 EXPOSE 3500
-CMD ["node", "node_modules/next/dist/bin/next", "start", "--port", "3500"]
+CMD ["node", "server.js"]

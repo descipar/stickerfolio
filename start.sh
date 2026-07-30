@@ -77,7 +77,8 @@ health="$(docker inspect --format '{{if .State.Health}}{{.State.Health.Status}}{
 [[ "$health" == "healthy" ]] || fail "The application did not become healthy in time."
 
 printf '\nLoading the bundled empty album catalogs...\n'
-docker compose exec --no-TTY app node node_modules/tsx/dist/cli.mjs scripts/seed-bundled-catalogs.ts
+docker compose run --rm --no-deps migrate \
+  node node_modules/tsx/dist/cli.mjs scripts/seed-bundled-catalogs.ts
 
 printf '\nStickerfolio is ready.\n\n'
 printf 'Open:     %s\n' "$app_url"

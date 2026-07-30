@@ -13,7 +13,7 @@ pnpm benchmark:argon2
 Or against the exact Compose image:
 
 ```bash
-docker compose run --rm app node node_modules/tsx/dist/cli.mjs scripts/benchmark-argon2.ts
+docker compose run --rm migrate node node_modules/tsx/dist/cli.mjs scripts/benchmark-argon2.ts
 ```
 
 The command reports platform, CPU architecture, Node version, parameters, one hash, one verification, and four concurrent verifications as JSON. Record target-hardware results during the release checklist; do not lower the parameters merely to satisfy a synthetic timing threshold.
