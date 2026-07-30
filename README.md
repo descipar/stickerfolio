@@ -8,7 +8,7 @@ A quantity of zero means a sticker is missing, one means it is owned, and every 
 
 - separate authenticated accounts and multiple albums per collector;
 - mobile-friendly search, section filters, progress, and quantity controls;
-- duplicate quantities from one through 99;
+- holding quantities from zero through 99, with every copy after the first counted as a duplicate;
 - separate CSV exports for missing stickers and available duplicates;
 - a complete, portable JSON export of a collector's own account and collection data;
 - private, explicit opt-in trade matching with one-way and two-way results;
@@ -70,7 +70,7 @@ Prerequisites:
 - an unused TCP port, `3500` by default.
 
 ```bash
-git clone git@github.com:descipar/stickerfolio.git
+git clone https://github.com/descipar/stickerfolio.git
 cd stickerfolio
 ./start.sh
 ```
@@ -109,11 +109,20 @@ Requirements:
 ```bash
 cp .env.example .env.local
 pnpm install
+# Edit .env.local and replace every placeholder before continuing.
+set -a
+source .env.local
+set +a
 pnpm db:migrate
 pnpm dev
 ```
 
-Replace every placeholder secret and database credential in `.env.local`. Open `http://localhost:3500` after startup. See [.env.example](.env.example) and [Deployment](docs/DEPLOYMENT.md) for the complete configuration reference.
+Replace every placeholder secret and database credential in `.env.local`
+before exporting it into the current shell. Next.js loads `.env.local`
+automatically, while standalone commands such as migrations and seeds read the
+current process environment. Open `http://localhost:3500` after startup. See
+[.env.example](.env.example) and [Deployment](docs/DEPLOYMENT.md) for the
+complete configuration reference.
 
 Run the standard validation suite with:
 
