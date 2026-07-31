@@ -26,8 +26,33 @@ describe("environment configuration", () => {
       connectionTimeoutMs: 5_000,
     });
     expect(environment.appBaseUrl.href).toBe("http://localhost:3500/");
+    expect(environment.publicShareBaseUrl).toBeNull();
     expect(environment.registrationMode).toBe("closed");
     expect(environment.smtp).toBeNull();
+  });
+
+  it("enables sharing only with an explicit non-loopback origin", () => {
+    expect(parseEnvironment({
+      ...validEnvironment,
+      PUBLIC_SHARE_BASE_URL: "https://stickers.example.com",
+    }).publicShareBaseUrl?.href).toBe("https://stickers.example.com/");
+    expect(parseEnvironment({
+      ...validEnvironment,
+      PUBLIC_SHARE_BASE_URL: "http://192.168.1.50:3500",
+    }).publicShareBaseUrl?.href).toBe("http://192.168.1.50:3500/");
+
+    for (const invalid of [
+      "http://localhost:3500",
+      "http://127.0.0.1:3500",
+      "http://[::1]:3500",
+      "http://0.0.0.0:3500",
+      "https://stickers.example.com/public",
+    ]) {
+      expect(() => parseEnvironment({
+        ...validEnvironment,
+        PUBLIC_SHARE_BASE_URL: invalid,
+      })).toThrow("PUBLIC_SHARE_BASE_URL");
+    }
   });
 
   it("supports verified external PostgreSQL TLS and SMTP", () => {

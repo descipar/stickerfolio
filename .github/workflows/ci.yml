@@ -90,6 +90,7 @@ jobs:
       DATABASE_URL: postgresql://stickerfolio:ci-only@localhost:5432/stickerfolio
       DATABASE_SSL_MODE: disable
       APP_BASE_URL: http://localhost:3500
+      PUBLIC_SHARE_BASE_URL: https://share.example.test
       BETTER_AUTH_SECRET: ci-only-secret-with-at-least-32-characters
       REGISTRATION_MODE: closed
       E2E_BASE_URL: http://localhost:3500

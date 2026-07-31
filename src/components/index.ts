@@ -5,6 +5,7 @@ export { AdminRegistration } from "./admin-registration";
 export { AlbumsOverview } from "./albums-overview";
 export { AppNavigation } from "./app-navigation";
 export { CollectionView } from "./collection-view";
+export { CollectionSharing } from "./collection-sharing";
 export { EmailChangeForm } from "./email-change-form";
 export { InvitationAcceptForm } from "./invitation-accept-form";
 export { OnboardingFlow } from "./onboarding-flow";

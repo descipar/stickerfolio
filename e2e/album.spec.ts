@@ -75,6 +75,35 @@ test.describe("album view", () => {
     await page.keyboard.press("Enter");
     await expect(missing).toHaveAttribute("aria-pressed", "true");
   });
+
+  test("creates, opens, and revokes a read-only share link", async ({ page, browser }) => {
+    await expect(page.getByRole("heading", { name: "Share your lists" })).toBeVisible();
+    await page.getByRole("button", { name: "Create share link" }).click();
+    const link = page.getByRole("textbox", { name: "New share link" });
+    await expect(link).toBeVisible();
+    const url = await link.inputValue();
+    expect(url).toMatch(/\/share\/[A-Za-z0-9_-]{43}$/);
+
+    const publicContext = await browser.newContext({
+      viewport: { width: 390, height: 844 },
+    });
+    const publicPage = await publicContext.newPage();
+    const tokenPath = new URL(url).pathname;
+    const response = await publicPage.goto(tokenPath);
+    expect(response?.status()).toBe(200);
+    expect(response?.headers()["cache-control"]).toContain("no-store");
+    expect(response?.headers()["referrer-policy"]).toBe("no-referrer");
+    await expect(publicPage.getByRole("heading", { name: albumTitle })).toBeVisible();
+    await expect(publicPage.getByText("Read-only", { exact: true })).toBeVisible();
+    await expect(publicPage.getByText("Missing", { exact: true }).first()).toBeVisible();
+    await expectNoHorizontalOverflow(publicPage);
+
+    await page.getByRole("button", { name: "Revoke", exact: true }).first().click();
+    await expect(page.getByText("Share link revoked.")).toBeVisible();
+    const revoked = await publicPage.goto(tokenPath);
+    expect(revoked?.status()).toBe(404);
+    await publicContext.close();
+  });
 });
 
 test.describe("album view error state", () => {

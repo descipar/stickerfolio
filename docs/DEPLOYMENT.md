@@ -36,6 +36,23 @@ STICKERFOLIO_URL=https://stickers.example.net ./start.sh
 
 `APP_BASE_URL` must exactly match the browser-visible origin. See [Security](SECURITY.md) before exposing the service beyond a trusted network.
 
+Read-only list sharing is disabled unless a separate recipient-reachable origin
+is configured:
+
+```dotenv
+PUBLIC_SHARE_BASE_URL=https://stickers.example.net
+```
+
+For sharing only inside a LAN, an address such as
+`http://192.168.1.50:3500` is valid. `localhost`, loopback addresses, credentials,
+paths, queries, and fragments are rejected because they cannot form dependable
+recipient links. Prefer HTTPS whenever links leave a trusted private network.
+The setting controls generated links only; `APP_BASE_URL` remains the
+browser-visible origin used for authentication and origin checks.
+On a new assisted installation, `start.sh` copies its detected LAN, DNS, VPN, or
+explicit `STICKERFOLIO_URL` origin into this setting when that origin is not a
+loopback address. Existing `.env` files are never changed automatically.
+
 ## Private repository checkout
 
 GitHub account passwords cannot authenticate Git operations. Suitable options include an authenticated GitHub CLI session, a personal access token used by a credential helper, or a read-only SSH deploy key.
@@ -69,6 +86,8 @@ The application is published through `${APP_PORT:-3500}`. PostgreSQL is availabl
 At minimum, configure:
 
 - `APP_BASE_URL`: exact public HTTP or HTTPS origin;
+- `PUBLIC_SHARE_BASE_URL`: optional recipient-reachable HTTP or HTTPS origin
+  that enables read-only sharing;
 - `BETTER_AUTH_SECRET`: random value of at least 32 characters;
 - `POSTGRES_PASSWORD`: unique database password;
 - `REGISTRATION_MODE`: `closed`, `invitation`, or `open`;

@@ -45,7 +45,8 @@ user
   ├─ account            (CASCADE)
   └─ collector_profiles (CASCADE)
        ├─ collections   (CASCADE)
-       │    └─ holdings (CASCADE)
+       │    ├─ holdings              (CASCADE)
+       │    └─ collection_share_links (CASCADE)
        └─ trading_preferences (CASCADE)
 ```
 
@@ -99,9 +100,10 @@ account-lifecycle integration tests.
 The account-deletion flow surfaces an **export-first** step with a single,
 versioned JSON download. The file contains the signed-in user's non-sensitive
 account fields, collector profile, trading preference, every personal
-collection and every sticker quantity from zero through 99. It therefore
-preserves missing stickers, owned single copies and duplicates. Deletion is
-standalone and never blocks on export.
+collection, every sticker quantity from zero through 99, and token-free
+share-link metadata. It therefore preserves missing stickers, owned single
+copies, duplicates, and the history of which list scopes were shared. Deletion
+is standalone and never blocks on export.
 
 The per-collection CSV export (issue #68) remains a focused missing or duplicate
 list. It deliberately omits owned single copies, profile/account fields and a
@@ -110,7 +112,8 @@ export.
 
 The complete export is derived exclusively from the authenticated session. It
 does not accept a user or collector identifier and excludes password hashes,
-sessions, authentication and invitation tokens, and every other user's data.
+sessions, authentication and invitation tokens, share-token hashes, plaintext
+share tokens, and every other user's data.
 
 Administrators cannot export another user's data because administrators have no
 access to other users' holdings (Roadmap 8.2 / 20.4); the admin delete dialog

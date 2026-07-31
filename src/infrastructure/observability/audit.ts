@@ -9,6 +9,9 @@ export type AuditAction =
   | "account.deleted"
   | "album_revision.published"
   | "album_revision.archived"
+  | "collection_share.created"
+  | "collection_share.updated"
+  | "collection_share.revoked"
   | "invitation.created"
   | "invitation.revoked"
   | "registration_mode.configured";
@@ -20,7 +23,10 @@ type AuditActor =
 export function writeAuditEvent(
   action: AuditAction,
   actor: AuditActor,
-  target: { type: "user" | "album_revision" | "invitation" | "registration_mode"; id: string },
+  target: {
+    type: "user" | "album_revision" | "collection_share" | "invitation" | "registration_mode";
+    id: string;
+  },
   details: Record<string, string | boolean | number | null> = {},
 ): void {
   writeLog("info", "security.audit", {

@@ -27,6 +27,19 @@ random_hex() {
   od -An -N32 -tx1 /dev/urandom | tr -d ' \n'
 }
 
+recipient_reachable_url() {
+  case "${1,,}" in
+    http://localhost|http://localhost:*|https://localhost|https://localhost:*|\
+    http://127.*|https://127.*|http://0.0.0.0|http://0.0.0.0:*|\
+    https://0.0.0.0|https://0.0.0.0:*|http://\[::1\]*|https://\[::1\]*)
+      return 1
+      ;;
+    *)
+      return 0
+      ;;
+  esac
+}
+
 if [[ ! -f .env ]]; then
   if [[ -n "${STICKERFOLIO_URL:-}" ]]; then
     app_url="$STICKERFOLIO_URL"
@@ -38,12 +51,17 @@ if [[ ! -f .env ]]; then
   postgres_password="$(random_hex)"
   auth_secret="$(random_hex)"
 
-  printf '%s\n' \
-    "APP_BASE_URL=${app_url}" \
-    "APP_PORT=3500" \
-    "POSTGRES_PASSWORD=${postgres_password}" \
-    "BETTER_AUTH_SECRET=${auth_secret}" \
-    "REGISTRATION_MODE=closed" > .env
+  {
+    printf '%s\n' \
+      "APP_BASE_URL=${app_url}" \
+      "APP_PORT=3500" \
+      "POSTGRES_PASSWORD=${postgres_password}" \
+      "BETTER_AUTH_SECRET=${auth_secret}" \
+      "REGISTRATION_MODE=closed"
+    if recipient_reachable_url "$app_url"; then
+      printf 'PUBLIC_SHARE_BASE_URL=%s\n' "$app_url"
+    fi
+  } > .env
   chmod 600 .env
   printf 'Created a private .env configuration for %s.\n' "$app_url"
 else

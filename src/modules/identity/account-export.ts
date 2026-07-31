@@ -6,7 +6,7 @@ import { getAuth, type StickerfolioAuth } from "./auth";
 import { AuthenticationError, requireIdentity } from "./session";
 
 export const accountExportFormat = "stickerfolio-account-export";
-export const accountExportVersion = 1;
+export const accountExportVersion = 2;
 
 interface ExportAccountRow {
   id: string;
@@ -51,6 +51,16 @@ interface ExportHoldingRow {
   holding_updated_at: Date | null;
 }
 
+interface ExportShareRow {
+  id: string;
+  collection_id: string;
+  scope: "missing" | "duplicates" | "both";
+  expires_at: Date | null;
+  revoked_at: Date | null;
+  created_at: Date;
+  updated_at: Date;
+}
+
 export interface AccountDataExport {
   format: typeof accountExportFormat;
   version: typeof accountExportVersion;
@@ -89,6 +99,14 @@ export interface AccountDataExport {
         label: string;
         status: "draft" | "published" | "archived";
       };
+      shareLinks: Array<{
+        id: string;
+        scope: "missing" | "duplicates" | "both";
+        expiresAt: string | null;
+        revokedAt: string | null;
+        createdAt: string;
+        updatedAt: string;
+      }>;
       holdings: Array<{
         stickerId: string;
         stableKey: string;
@@ -165,6 +183,16 @@ async function loadAccountDataExport(
     [row.collector_id],
     client,
   );
+  const sharesResult = await query<ExportShareRow>(
+    `SELECT sl.id, sl.collection_id, sl.scope, sl.expires_at, sl.revoked_at,
+            sl.created_at, sl.updated_at
+       FROM collection_share_links sl
+       JOIN collections c ON c.id = sl.collection_id
+      WHERE c.collector_id = $1
+      ORDER BY sl.collection_id, sl.created_at, sl.id`,
+    [row.collector_id],
+    client,
+  );
 
   const collections = new Map<string, NonNullable<AccountDataExport["collector"]>["collections"][number]>();
   for (const holding of holdingsResult.rows) {
@@ -186,6 +214,7 @@ async function loadAccountDataExport(
           label: holding.revision_label,
           status: holding.revision_status,
         },
+        shareLinks: [],
         holdings: [],
       };
       collections.set(holding.collection_id, collection);
@@ -202,6 +231,16 @@ async function loadAccountDataExport(
       },
       quantity: holding.quantity,
       updatedAt: holding.holding_updated_at?.toISOString() ?? null,
+    });
+  }
+  for (const share of sharesResult.rows) {
+    collections.get(share.collection_id)?.shareLinks.push({
+      id: share.id,
+      scope: share.scope,
+      expiresAt: share.expires_at?.toISOString() ?? null,
+      revokedAt: share.revoked_at?.toISOString() ?? null,
+      createdAt: share.created_at.toISOString(),
+      updatedAt: share.updated_at.toISOString(),
     });
   }
 

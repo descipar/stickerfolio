@@ -8,7 +8,11 @@ import {
   setManagedUserStatus,
 } from "@/modules/admin";
 import { seedAlbumTemplate } from "@/modules/catalog";
-import { addOwnCollection, setOwnHoldingQuantity } from "@/modules/collections";
+import {
+  addOwnCollection,
+  createOwnCollectionShare,
+  setOwnHoldingQuantity,
+} from "@/modules/collections";
 import {
   acceptInvitation,
   AccountLifecycleError,
@@ -77,6 +81,7 @@ async function graphCounts(userId: string) {
     profiles: number;
     collections: number;
     holdings: number;
+    shares: number;
     trading: number;
   }>(
     `SELECT
@@ -91,6 +96,10 @@ async function graphCounts(userId: string) {
           JOIN collections c ON c.id = h.collection_id
           JOIN collector_profiles cp ON cp.id = c.collector_id
          WHERE cp.user_id = $1) AS holdings,
+       (SELECT count(*)::int FROM collection_share_links sl
+          JOIN collections c ON c.id = sl.collection_id
+          JOIN collector_profiles cp ON cp.id = c.collector_id
+         WHERE cp.user_id = $1) AS shares,
        (SELECT count(*)::int FROM trading_preferences tp
           JOIN collector_profiles cp ON cp.id = tp.collector_id
          WHERE cp.user_id = $1) AS trading`,
@@ -107,6 +116,7 @@ describe("account lifecycle: suspension, deactivation, and deletion", () => {
   let adminBId: string;
   let aliceId: string;
   let bobId: string;
+  let aliceCollectionId: string;
 
   beforeAll(async () => {
     await query(`TRUNCATE "user", albums, collector_profiles CASCADE`, [], pool);
@@ -156,6 +166,7 @@ describe("account lifecycle: suspension, deactivation, and deletion", () => {
     const bobHeaders = (await signIn("bob@example.test", bobPassword)).headers;
 
     const aliceCollection = await addOwnCollection(aliceHeaders, albumId, auth, pool);
+    aliceCollectionId = aliceCollection.id;
     await setOwnHoldingQuantity(aliceHeaders, aliceCollection.id, stickerOne, 2, auth, pool);
     await setOwnHoldingQuantity(aliceHeaders, aliceCollection.id, stickerTwo, 1, auth, pool);
     const bobCollection = await addOwnCollection(bobHeaders, albumId, auth, pool);
@@ -231,6 +242,7 @@ describe("account lifecycle: suspension, deactivation, and deletion", () => {
       profiles: 0,
       collections: 0,
       holdings: 0,
+      shares: 0,
       trading: 0,
     });
     // Another user is untouched by the deletion.
@@ -245,6 +257,14 @@ describe("account lifecycle: suspension, deactivation, and deletion", () => {
   });
 
   it("exports only the signed-in user's complete portable account data", async () => {
+    const ownShare = await createOwnCollectionShare(
+      aliceHeaders,
+      aliceCollectionId,
+      "both",
+      new Date("2030-01-01T00:00:00.000Z"),
+      auth,
+      pool,
+    );
     const otherUser = await createManagedUser(adminHeaders, {
       email: "export-neighbor@example.test",
       displayName: "Export Neighbor",
@@ -271,7 +291,7 @@ describe("account lifecycle: suspension, deactivation, and deletion", () => {
 
     expect(data).toMatchObject({
       format: "stickerfolio-account-export",
-      version: 1,
+      version: 2,
       exportedAt: exportedAt.toISOString(),
       account: {
         id: aliceId,
@@ -287,6 +307,13 @@ describe("account lifecycle: suspension, deactivation, and deletion", () => {
           {
             album: { id: albumId, slug: "lifecycle-test", title: "Lifecycle test album" },
             revision: { id: revisionId, number: 1 },
+            shareLinks: [
+              {
+                id: ownShare.share.id,
+                scope: "both",
+                revokedAt: null,
+              },
+            ],
           },
         ],
       },
@@ -304,6 +331,13 @@ describe("account lifecycle: suspension, deactivation, and deletion", () => {
     expect(serialized).not.toContain(bootstrapAdminEmail);
     expect(serialized).not.toContain("export-neighbor@example.test");
     expect(serialized).not.toContain(otherCollection.id);
+    expect(serialized).not.toContain(ownShare.token);
+    const storedShare = await query<{ token_hash: string }>(
+      "SELECT token_hash FROM collection_share_links WHERE id = $1",
+      [ownShare.share.id],
+      pool,
+    );
+    expect(serialized).not.toContain(storedShare.rows[0]!.token_hash);
     expect(collectJsonKeys(data)).not.toEqual(expect.arrayContaining([
       "password",
       "passwordHash",
@@ -355,6 +389,7 @@ describe("account lifecycle: suspension, deactivation, and deletion", () => {
       profiles: 0,
       collections: 0,
       holdings: 0,
+      shares: 0,
       trading: 0,
     });
 

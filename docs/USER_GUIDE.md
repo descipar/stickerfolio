@@ -32,6 +32,31 @@ Each personal album provides two separate exports:
 
 Exports are scoped to the signed-in collector and one selected personal album. They do not include another collector's holdings. These focused files are intended for wanted and swap lists; they are not a complete account backup.
 
+## Read-only share links
+
+Open a personal album and use **Share your lists** to create a live,
+read-only link for missing stickers, duplicates, or both. An optional expiration
+date can stop access automatically. The complete link is shown only when it is
+created, so copy or share it immediately; Stickerfolio stores only a
+cryptographic hash of the secret token.
+
+Sharing is available only when the installation administrator has configured a
+recipient-reachable `PUBLIC_SHARE_BASE_URL`. A default localhost installation
+keeps creation disabled instead of producing a link that would point recipients
+back to their own devices.
+
+Recipients do not need an account. The mobile page contains only the album and
+revision context, section names, selected sticker codes and labels, and spare
+counts for duplicates. It does not expose the collector's login address,
+display name, internal identifiers, owned single copies, or any other
+collection.
+
+The page reflects current quantities every time it is opened. Changing a link
+between missing, duplicate, or both lists takes effect immediately. **Expire
+now** disables an active link through its expiration time; **Revoke** disables
+it permanently. Expired and revoked links cannot be reactivated—create a new
+link when sharing should resume.
+
 ## Complete account export
 
 The account danger zone provides one versioned JSON download containing the signed-in user's
@@ -39,8 +64,11 @@ non-sensitive account fields, collector profile, trading preference, every perso
 and every sticker quantity from zero through 99. It includes missing stickers, owned single
 copies, and duplicates in one portable file.
 
-The export never contains password hashes, sessions, tokens, invitations, or another user's
-data. Download it before permanent account deletion if you want to retain a complete copy.
+Share-link metadata such as scope, timestamps, and revocation state is included,
+but the secret token and its hash are excluded. The export never contains
+password hashes, sessions, tokens, invitations, or another user's data.
+Download it before permanent account deletion if you want to retain a complete
+copy.
 
 ## Trade matching
 

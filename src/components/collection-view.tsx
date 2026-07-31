@@ -2,6 +2,8 @@
 
 import { useEffect, useMemo, useState, type CSSProperties } from "react";
 
+import { CollectionSharing } from "./collection-sharing";
+
 type Filter = "all" | "missing" | "owned" | "duplicates";
 
 interface Sticker {
@@ -172,6 +174,8 @@ export function CollectionView({ collectionId }: { collectionId: string }) {
           Export duplicates list (CSV)
         </a>
       </section>
+
+      <CollectionSharing collectionId={collectionId} />
 
       <section className="collection-controls" aria-label="Find and filter stickers">
         <label className="search-field collection-search">
