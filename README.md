@@ -11,6 +11,7 @@ A quantity of zero means a sticker is missing, one means it is owned, and every 
 - holding quantities from zero through 99, with every copy after the first counted as a duplicate;
 - separate CSV exports for missing stickers and available duplicates;
 - revocable, optionally expiring read-only links for live missing and duplicate lists;
+- short-lived QR and manual codes for private in-person collection comparisons;
 - a complete, portable JSON export of a collector's own account and collection data;
 - private, explicit opt-in trade matching with one-way and two-way results;
 - expandable trade details, section filters, sorting, and pagination;
@@ -24,6 +25,10 @@ recipient-reachable `PUBLIC_SHARE_BASE_URL`. Stickerfolio never generates
 recipient links pointing at localhost.
 
 Trade matching is read-only. It shows an opted-in partner's display name and only the sticker codes relevant to a possible exchange—never login addresses, unrelated holdings, or complete foreign collections. Viewing a result does not reserve stickers or claim that a trade occurred.
+
+Direct comparison is a separate explicit flow for two signed-in collectors.
+Scanning a QR code or entering its manual fallback does not opt either person
+into general trade discovery, and the grant expires after 15 minutes.
 
 Stickerfolio currently focuses on collection tracking, controlled list sharing,
 catalog administration, and private trade discovery. It does not provide in-app

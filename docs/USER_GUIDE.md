@@ -57,6 +57,31 @@ now** disables an active link through its expiration time; **Revoke** disables
 it permanently. Expired and revoked links cannot be reactivated—create a new
 link when sharing should resume.
 
+## Direct comparison codes
+
+Open a personal album and use **Direct comparison** when meeting another
+collector. Stickerfolio creates a QR link and equivalent manual code that are
+valid for 15 minutes. The other collector must be signed in and own a personal
+collection for the same logical album. A phone's normal camera can scan the QR
+code; **Compare** in the main navigation provides the camera-free code-entry
+fallback.
+
+The QR link uses the configured `APP_BASE_URL`. For a second phone to open it,
+that address must be reachable from the phone; the assisted `start.sh` setup
+normally records the detected LAN address. Manual code entry remains available
+when the configured link is not reachable.
+
+After choosing their compatible album, the recipient sees only stickers that
+one collector is missing and the other can spare. Stable sticker identities
+keep comparisons accurate across different published revisions, while each
+side's revision-specific code remains visible. Results use current quantities
+and never change or reserve holdings.
+
+Direct comparison is independent from **Appear in trade matching**. Creating or
+using a code does not change either collector's general discovery preference.
+The owner can revoke an active code immediately; expired and revoked codes fail
+the same way as unknown codes.
+
 ## Complete account export
 
 The account danger zone provides one versioned JSON download containing the signed-in user's
@@ -64,9 +89,10 @@ non-sensitive account fields, collector profile, trading preference, every perso
 and every sticker quantity from zero through 99. It includes missing stickers, owned single
 copies, and duplicates in one portable file.
 
-Share-link metadata such as scope, timestamps, and revocation state is included,
-but the secret token and its hash are excluded. The export never contains
-password hashes, sessions, tokens, invitations, or another user's data.
+Share-link and comparison-grant metadata such as timestamps and revocation state
+is included, but secret tokens, manual codes, and their hashes are excluded. The
+export never contains password hashes, sessions, tokens, invitations, or
+another user's data.
 Download it before permanent account deletion if you want to retain a complete
 copy.
 

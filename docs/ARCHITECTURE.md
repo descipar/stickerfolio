@@ -44,3 +44,18 @@ state. Missing and duplicate rows are derived from current holdings on every
 request, so a link remains live without copying or denormalizing private
 collection data. The HTTP and visual layers call the module's public API and do
 not query the share table directly.
+
+## Direct collection comparison
+
+Short-lived comparison grants belong to the `trading` module. They reuse the
+capability lifecycle pattern from collection sharing but remain a distinct
+authenticated authority: a grant permits only a derived comparison against one
+compatible collection owned by the signed-in recipient. It never exposes a
+complete shared list and does not depend on either collector's general trading
+visibility preference.
+
+The QR token and manual fallback code are independently generated and stored
+only as SHA-256 hashes. The comparison query joins the two pinned revisions by
+stable sticker identity inside a repeatable-read transaction, derives current
+missing/duplicate directions locally, and returns only display name,
+revision-specific codes, sections, and spare counts relevant to the exchange.

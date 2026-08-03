@@ -26,6 +26,7 @@ import {
   deleteOwnAccount,
   exportOwnAccountData,
 } from "@/modules/identity";
+import { createOwnComparisonGrant } from "@/modules/trading";
 
 import { createTestEnvironment } from "./create-test-environment";
 
@@ -82,6 +83,7 @@ async function graphCounts(userId: string) {
     collections: number;
     holdings: number;
     shares: number;
+    comparisonGrants: number;
     trading: number;
   }>(
     `SELECT
@@ -100,6 +102,10 @@ async function graphCounts(userId: string) {
           JOIN collections c ON c.id = sl.collection_id
           JOIN collector_profiles cp ON cp.id = c.collector_id
          WHERE cp.user_id = $1) AS shares,
+       (SELECT count(*)::int FROM collection_comparison_grants grant
+          JOIN collections c ON c.id = grant.collection_id
+          JOIN collector_profiles cp ON cp.id = c.collector_id
+         WHERE cp.user_id = $1) AS "comparisonGrants",
        (SELECT count(*)::int FROM trading_preferences tp
           JOIN collector_profiles cp ON cp.id = tp.collector_id
          WHERE cp.user_id = $1) AS trading`,
@@ -243,6 +249,7 @@ describe("account lifecycle: suspension, deactivation, and deletion", () => {
       collections: 0,
       holdings: 0,
       shares: 0,
+      comparisonGrants: 0,
       trading: 0,
     });
     // Another user is untouched by the deletion.
@@ -262,6 +269,12 @@ describe("account lifecycle: suspension, deactivation, and deletion", () => {
       aliceCollectionId,
       "both",
       new Date("2030-01-01T00:00:00.000Z"),
+      auth,
+      pool,
+    );
+    const ownComparisonGrant = await createOwnComparisonGrant(
+      aliceHeaders,
+      aliceCollectionId,
       auth,
       pool,
     );
@@ -291,7 +304,7 @@ describe("account lifecycle: suspension, deactivation, and deletion", () => {
 
     expect(data).toMatchObject({
       format: "stickerfolio-account-export",
-      version: 2,
+      version: 3,
       exportedAt: exportedAt.toISOString(),
       account: {
         id: aliceId,
@@ -314,6 +327,12 @@ describe("account lifecycle: suspension, deactivation, and deletion", () => {
                 revokedAt: null,
               },
             ],
+            comparisonGrants: [
+              {
+                id: ownComparisonGrant.grant.id,
+                revokedAt: null,
+              },
+            ],
           },
         ],
       },
@@ -332,12 +351,21 @@ describe("account lifecycle: suspension, deactivation, and deletion", () => {
     expect(serialized).not.toContain("export-neighbor@example.test");
     expect(serialized).not.toContain(otherCollection.id);
     expect(serialized).not.toContain(ownShare.token);
+    expect(serialized).not.toContain(ownComparisonGrant.token);
+    expect(serialized).not.toContain(ownComparisonGrant.code);
     const storedShare = await query<{ token_hash: string }>(
       "SELECT token_hash FROM collection_share_links WHERE id = $1",
       [ownShare.share.id],
       pool,
     );
     expect(serialized).not.toContain(storedShare.rows[0]!.token_hash);
+    const storedComparisonGrant = await query<{ token_hash: string; code_hash: string }>(
+      "SELECT token_hash, code_hash FROM collection_comparison_grants WHERE id = $1",
+      [ownComparisonGrant.grant.id],
+      pool,
+    );
+    expect(serialized).not.toContain(storedComparisonGrant.rows[0]!.token_hash);
+    expect(serialized).not.toContain(storedComparisonGrant.rows[0]!.code_hash);
     expect(collectJsonKeys(data)).not.toEqual(expect.arrayContaining([
       "password",
       "passwordHash",
@@ -390,6 +418,7 @@ describe("account lifecycle: suspension, deactivation, and deletion", () => {
       collections: 0,
       holdings: 0,
       shares: 0,
+      comparisonGrants: 0,
       trading: 0,
     });
 

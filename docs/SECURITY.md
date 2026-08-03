@@ -32,7 +32,8 @@ Stickerfolio deliberately ignores `X-Forwarded-For` and all other forwarding hea
 
 - login attempts: five requests per minute and client address;
 - open registration: ten requests per minute and client address;
-- invitation redemption: ten requests per minute and client address.
+- invitation redemption: ten requests per minute and client address;
+- comparison-code preparation and resolution: 30 requests per minute and client address;
 - public share pages: 120 requests per minute and client address.
 
 Counters are process-local and support the documented single-application-instance deployment. Horizontal application scaling requires a shared rate-limit store first.
@@ -56,9 +57,21 @@ token is not leaked through outgoing navigation. Link creation additionally
 requires an explicit `PUBLIC_SHARE_BASE_URL`; localhost and loopback origins are
 rejected.
 
+Direct comparison uses a separate, authenticated capability. Each grant has an
+independent 256-bit QR token and a 50-bit manual code, stores only SHA-256
+hashes, expires after 15 minutes, and can be revoked immediately. Manual-code
+and result endpoints are rate-limited. Possession of a valid credential is not
+enough by itself: the recipient must have an active signed-in collector profile
+and an owned collection for the same logical album. Responses contain only the
+partner display name and currently relevant exchange entries. They never expose
+login identifiers, complete holdings, foreign collection IDs, or unrelated
+stickers. Direct comparison neither reads nor changes the general trading
+visibility preference. Tokenized comparison pages are non-cacheable, carry
+`noindex` directives, and use a `no-referrer` policy.
+
 The complete account-data export is also owner-scoped from the authenticated
 session. It includes only non-sensitive account fields and the owner's profile,
-preferences, collections, quantities, and token-free share metadata;
+preferences, collections, quantities, and token-free share/comparison metadata;
 authentication secrets and other collectors' data are excluded. Responses are
 marked private and non-cacheable.
 

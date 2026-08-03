@@ -5,7 +5,7 @@ import { AdminError } from "@/modules/admin";
 import { CatalogError } from "@/modules/catalog";
 import { CollectionError } from "@/modules/collections";
 import { AuthenticationError, EmailChangeError, InvitationError, RegistrationError } from "@/modules/identity";
-import { TradingError } from "@/modules/trading";
+import { DirectComparisonError, TradingError } from "@/modules/trading";
 
 export function apiError(error: unknown): NextResponse {
   if (error instanceof AdminError) {
@@ -56,6 +56,9 @@ export function apiError(error: unknown): NextResponse {
       { error: error.status === 404 ? "Collection not found." : "Trade matches could not be loaded." },
       { status: error.status },
     );
+  }
+  if (error instanceof DirectComparisonError) {
+    return NextResponse.json({ error: "Comparison unavailable." }, { status: error.status });
   }
   return NextResponse.json({ error: "The request could not be completed." }, { status: 500 });
 }

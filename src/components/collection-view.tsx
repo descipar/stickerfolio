@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState, type CSSProperties } from "react";
 
 import { CollectionSharing } from "./collection-sharing";
+import { CollectionComparison } from "./collection-comparison";
 
 type Filter = "all" | "missing" | "owned" | "duplicates";
 
@@ -174,6 +175,8 @@ export function CollectionView({ collectionId }: { collectionId: string }) {
           Export duplicates list (CSV)
         </a>
       </section>
+
+      <CollectionComparison collectionId={collectionId} />
 
       <CollectionSharing collectionId={collectionId} />
 

@@ -12,6 +12,8 @@ export type AuditAction =
   | "collection_share.created"
   | "collection_share.updated"
   | "collection_share.revoked"
+  | "comparison_grant.created"
+  | "comparison_grant.revoked"
   | "invitation.created"
   | "invitation.revoked"
   | "registration_mode.configured";
@@ -24,7 +26,13 @@ export function writeAuditEvent(
   action: AuditAction,
   actor: AuditActor,
   target: {
-    type: "user" | "album_revision" | "collection_share" | "invitation" | "registration_mode";
+    type:
+      | "user"
+      | "album_revision"
+      | "collection_share"
+      | "comparison_grant"
+      | "invitation"
+      | "registration_mode";
     id: string;
   },
   details: Record<string, string | boolean | number | null> = {},

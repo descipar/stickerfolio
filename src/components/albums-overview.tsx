@@ -94,6 +94,9 @@ export function AlbumsOverview({ displayName }: { displayName: string }) {
         <p className="eyebrow">Hello {displayName}</p>
         <h1 id="album-overview-title" className="overview-title">Your sticker albums</h1>
         <p className="overview-subtitle">Check off stickers, count duplicates, and keep your progress in view.</p>
+        <Link className="secondary-button inline-action overview-compare-action" href="/compare">
+          Enter a comparison code
+        </Link>
       </section>
 
       {overview.collections.length > 0 ? (

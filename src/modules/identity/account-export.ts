@@ -6,7 +6,7 @@ import { getAuth, type StickerfolioAuth } from "./auth";
 import { AuthenticationError, requireIdentity } from "./session";
 
 export const accountExportFormat = "stickerfolio-account-export";
-export const accountExportVersion = 2;
+export const accountExportVersion = 3;
 
 interface ExportAccountRow {
   id: string;
@@ -61,6 +61,15 @@ interface ExportShareRow {
   updated_at: Date;
 }
 
+interface ExportComparisonGrantRow {
+  id: string;
+  collection_id: string;
+  expires_at: Date;
+  revoked_at: Date | null;
+  created_at: Date;
+  updated_at: Date;
+}
+
 export interface AccountDataExport {
   format: typeof accountExportFormat;
   version: typeof accountExportVersion;
@@ -103,6 +112,13 @@ export interface AccountDataExport {
         id: string;
         scope: "missing" | "duplicates" | "both";
         expiresAt: string | null;
+        revokedAt: string | null;
+        createdAt: string;
+        updatedAt: string;
+      }>;
+      comparisonGrants: Array<{
+        id: string;
+        expiresAt: string;
         revokedAt: string | null;
         createdAt: string;
         updatedAt: string;
@@ -193,6 +209,16 @@ async function loadAccountDataExport(
     [row.collector_id],
     client,
   );
+  const comparisonGrantsResult = await query<ExportComparisonGrantRow>(
+    `SELECT grant.id, grant.collection_id, grant.expires_at, grant.revoked_at,
+            grant.created_at, grant.updated_at
+       FROM collection_comparison_grants grant
+       JOIN collections c ON c.id = grant.collection_id
+      WHERE c.collector_id = $1
+      ORDER BY grant.collection_id, grant.created_at, grant.id`,
+    [row.collector_id],
+    client,
+  );
 
   const collections = new Map<string, NonNullable<AccountDataExport["collector"]>["collections"][number]>();
   for (const holding of holdingsResult.rows) {
@@ -215,6 +241,7 @@ async function loadAccountDataExport(
           status: holding.revision_status,
         },
         shareLinks: [],
+        comparisonGrants: [],
         holdings: [],
       };
       collections.set(holding.collection_id, collection);
@@ -241,6 +268,15 @@ async function loadAccountDataExport(
       revokedAt: share.revoked_at?.toISOString() ?? null,
       createdAt: share.created_at.toISOString(),
       updatedAt: share.updated_at.toISOString(),
+    });
+  }
+  for (const grant of comparisonGrantsResult.rows) {
+    collections.get(grant.collection_id)?.comparisonGrants.push({
+      id: grant.id,
+      expiresAt: grant.expires_at.toISOString(),
+      revokedAt: grant.revoked_at?.toISOString() ?? null,
+      createdAt: grant.created_at.toISOString(),
+      updatedAt: grant.updated_at.toISOString(),
     });
   }
 

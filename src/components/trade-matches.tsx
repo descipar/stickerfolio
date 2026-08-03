@@ -22,7 +22,7 @@ interface TradeFilters {
 
 const STICKER_PREVIEW = 8;
 
-function StickerGroup({ title, stickers }: { title: string; stickers: TradeSticker[] }) {
+export function TradeStickerGroup({ title, stickers }: { title: string; stickers: TradeSticker[] }) {
   const [showAll, setShowAll] = useState(false);
   const visible = showAll ? stickers : stickers.slice(0, STICKER_PREVIEW);
 
@@ -93,8 +93,8 @@ function PartnerCard({ match, index }: { match: TradeMatch; index: number }) {
       </button>
       {open ? (
         <div className="trade-details" id={detailsId}>
-          <StickerGroup title="They can offer you" stickers={match.offersToYou} />
-          <StickerGroup title="You can offer them" stickers={match.needsFromYou} />
+          <TradeStickerGroup title="They can offer you" stickers={match.offersToYou} />
+          <TradeStickerGroup title="You can offer them" stickers={match.needsFromYou} />
         </div>
       ) : (
         <p className="muted trade-hint" aria-hidden="true">Tap to see the {match.offeredCount + match.wantedCount} matching stickers.</p>
