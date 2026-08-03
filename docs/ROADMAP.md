@@ -1,7 +1,7 @@
 # Stickerfolio – Product and Architecture Roadmap
 
 Status: Draft with confirmed Phase 0 decisions
-Last updated: July 18, 2026
+Last updated: August 3, 2026
 
 ## 1. Purpose of this document
 
@@ -493,7 +493,29 @@ The first version is read-only:
 
 Participation is opt-in. New profiles remain hidden until the user enables `trading_preferences.visible`. Only opted-in collectors are considered. The application shows display name and matching sticker information, never the login email. An explicitly shared contact method may be added later.
 
-### 8.7 Later extension: trade requests and messages
+### 8.7 Direct collection comparison by QR or code
+
+Issue #95 extends read-only trade matching with a private, deliberate comparison
+between two signed-in collectors. The owner of a collection creates a separate,
+short-lived comparison grant and shares either its QR link or a manual code. The
+recipient opens the link with the phone's normal camera or enters the code, then
+selects an owned collection for the same logical album.
+
+The comparison:
+
+- matches stable sticker IDs across compatible album revisions,
+- shows only both display names and exchange-relevant sticker details,
+- remains available for 15 minutes and can be revoked early,
+- stores only hashes of the QR token and manual code,
+- is independent of the public trade-partner visibility opt-in,
+- never exposes a complete collection or login email,
+- never changes holdings and creates no reservation, request, or message.
+
+This extension is implemented as part of issue #95. It does not create a public
+collector directory: possession of a valid, unexpired grant and authentication
+are both required.
+
+### 8.8 Later extension: trade requests and messages
 
 After the read-only view is established, the trading module may add:
 
@@ -794,11 +816,13 @@ Outcome: new users can be admitted in a controlled way and start collecting inde
 - query one-way and two-way matches,
 - implement a mobile partner overview,
 - show offered and needed sticker details,
+- add a private, short-lived direct comparison by QR link or manual code (#95),
 - add sorting and filters,
 - add authorization and privacy tests,
 - keep an automated load-test smoke and a reusable 50-user capacity-test harness.
 
-Outcome: users see possible partners without changing holdings or trade state.
+Outcome: users see possible partners or deliberately compare two collections
+without changing holdings or trade state.
 
 ### Phase 6 – Later binding trade actions
 
@@ -902,15 +926,17 @@ The multi-user MVP is complete when:
 12. Participating users can see potential partners for the same album.
 13. Hidden collector data never appears in trade matching.
 14. Trade matching never changes holdings.
-15. Core workflows are usable at iPhone 13 size.
-16. The automated load-test smoke passes without domain errors or lost updates;
+15. A signed-in collector can share a short-lived, revocable direct-comparison
+    grant by QR link or manual code without enabling public trade visibility.
+16. Core workflows are usable at iPhone 13 size.
+17. The automated load-test smoke passes without domain errors or lost updates;
     the reusable 50-user scenario remains available for capacity validation
     before materially wider public use.
-17. PostgreSQL backup and restore are documented and tested.
-18. Production code contains no SQLite dependency or legacy compatibility layer.
-19. Sessions survive app restart and can be revoked server-side.
-20. Integration tests run against real PostgreSQL.
-21. The bootstrap admin is created only for an empty user table, must change `admin123!` before any domain function, and is never reset on later starts.
+18. PostgreSQL backup and restore are documented and tested.
+19. Production code contains no SQLite dependency or legacy compatibility layer.
+20. Sessions survive app restart and can be revoked server-side.
+21. Integration tests run against real PostgreSQL.
+22. The bootstrap admin is created only for an empty user table, must change `admin123!` before any domain function, and is never reset on later starts.
 
 ## 20. Confirmed decisions
 
@@ -920,13 +946,16 @@ The multi-user MVP is complete when:
 4. **Admin visibility:** no access to foreign holdings; accounts, roles, settings, and catalogs only.
 5. **Trade-profile visibility:** opt-in and hidden by default.
 6. **Visible profile data:** display name and matching stickers only; never login email.
-7. **Template import:** administrators only.
-8. **Template corrections:** published revisions are structurally frozen; structural corrections create a new revision, while audited metadata corrections are allowed.
-9. **Migration tool:** `node-pg-migrate`.
-10. **PostgreSQL integration tests:** Testcontainers.
-11. **Authentication:** Better Auth with email/password, custom Argon2id functions, and revocable PostgreSQL sessions.
-12. **Backup:** a relaxed RPO is acceptable; periodic externally stored `pg_dump` plus occasional tested restore is sufficient.
-13. **Capacity targets:** for an optional representative 50-user capacity run,
+7. **Private direct comparison:** a short-lived QR or code grant deliberately
+   shared by a collector bypasses public discovery visibility, but still requires
+   authentication and exposes only derived, exchange-relevant data.
+8. **Template import:** administrators only.
+9. **Template corrections:** published revisions are structurally frozen; structural corrections create a new revision, while audited metadata corrections are allowed.
+10. **Migration tool:** `node-pg-migrate`.
+11. **PostgreSQL integration tests:** Testcontainers.
+12. **Authentication:** Better Auth with email/password, custom Argon2id functions, and revocable PostgreSQL sessions.
+13. **Backup:** a relaxed RPO is acceptable; periodic externally stored `pg_dump` plus occasional tested restore is sufficient.
+14. **Capacity targets:** for an optional representative 50-user capacity run,
     album view p95 below 400 ms, trade matching p95 below 1 second, and quantity
     update p95 below 200 ms. This target-hardware run is not an MVP release gate
     for a hobby installation.
