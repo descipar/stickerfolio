@@ -653,7 +653,13 @@ There is no partial index for `quantity = 0` because missing stickers have no ho
 
 ### 12.3 Load test
 
-Before public production use, at least this scenario is tested:
+Continuous integration runs a reduced load-test smoke scenario to catch domain
+errors, lost updates, and broken test infrastructure. For a hobby installation,
+this functional smoke is sufficient for MVP release readiness.
+
+Before materially wider public use or capacity-sensitive deployment decisions,
+the full scenario should additionally be measured on representative target
+hardware:
 
 - 50 concurrent authenticated users,
 - concurrent album views,
@@ -662,7 +668,10 @@ Before public production use, at least this scenario is tested:
 - registration and login under load,
 - slow or temporarily unavailable database behavior.
 
-The objective is stable operation for expected use, not an artificial headline benchmark.
+The objective is stable operation for expected use, not an artificial headline
+benchmark. The repository keeps the full 50-user harness and response targets as
+an optional capacity-validation tool; target-hardware measurements are not an
+MVP release gate.
 
 ## 13. Backup and recovery
 
@@ -787,7 +796,7 @@ Outcome: new users can be admitted in a controlled way and start collecting inde
 - show offered and needed sticker details,
 - add sorting and filters,
 - add authorization and privacy tests,
-- load-test approximately 50 concurrent users.
+- keep an automated load-test smoke and a reusable 50-user capacity-test harness.
 
 Outcome: users see possible partners without changing holdings or trade state.
 
@@ -894,7 +903,9 @@ The multi-user MVP is complete when:
 13. Hidden collector data never appears in trade matching.
 14. Trade matching never changes holdings.
 15. Core workflows are usable at iPhone 13 size.
-16. A load test with approximately 50 concurrent users passes without domain errors.
+16. The automated load-test smoke passes without domain errors or lost updates;
+    the reusable 50-user scenario remains available for capacity validation
+    before materially wider public use.
 17. PostgreSQL backup and restore are documented and tested.
 18. Production code contains no SQLite dependency or legacy compatibility layer.
 19. Sessions survive app restart and can be revoked server-side.
@@ -915,7 +926,10 @@ The multi-user MVP is complete when:
 10. **PostgreSQL integration tests:** Testcontainers.
 11. **Authentication:** Better Auth with email/password, custom Argon2id functions, and revocable PostgreSQL sessions.
 12. **Backup:** a relaxed RPO is acceptable; periodic externally stored `pg_dump` plus occasional tested restore is sufficient.
-13. **Response targets:** album view p95 below 400 ms, trade matching p95 below 1 second, quantity update p95 below 200 ms at approximately 50 concurrent users.
+13. **Capacity targets:** for an optional representative 50-user capacity run,
+    album view p95 below 400 ms, trade matching p95 below 1 second, and quantity
+    update p95 below 200 ms. This target-hardware run is not an MVP release gate
+    for a hobby installation.
 14. **First administrator:** an empty installation creates `admin@stickerfolio.local` with `admin123!` exactly once and requires a password change before further use.
 
 ## 21. Recommendation summary

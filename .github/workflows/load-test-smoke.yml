@@ -6,9 +6,10 @@
 # strict p95 latency thresholds: a GitHub-hosted runner is NOT the target
 # hardware (Raspberry Pi 4 baseline, see load-test/README.md), so its latency
 # numbers are not authoritative. The smoke's job is to prove the whole pipeline
-# executes end-to-end; a k6 threshold verdict is authoritative only on the target
-# hardware, so a crossed threshold (k6 exit 99) does not fail this CI job. Genuine
-# execution failures (docker/seed/k6 cannot run) still fail it.
+# executes end-to-end and preserve its correctness invariants. Smoke mode does
+# not configure hardware-specific p95 thresholds, so any crossed threshold is a
+# genuine domain-error, write-consistency, or failed-check signal and fails the
+# workflow.
 #
 # This workflow is separate from ci.yml on purpose so the existing quality and
 # deployment jobs are unaffected and this check is not a required merge gate.
@@ -89,26 +90,14 @@ jobs:
           sudo install "/tmp/k6-${K6_VERSION}-linux-amd64/k6" /usr/local/bin/k6
           k6 version
 
-      - name: Run reduced k6 smoke (proves end-to-end execution; thresholds not gated here)
+      - name: Run reduced k6 smoke (correctness thresholds enforced)
         run: |
-          set +e
           k6 run \
             --env MODE=smoke \
             --env BASE_URL=http://localhost:3500 \
             --env TRUSTED_IP_HEADER=${AUTH_TRUSTED_IP_HEADER} \
             --summary-export=load-test/results/ci-k6-summary.json \
             load-test/k6/load-test.js
-          code=$?
-          # k6 exit 99 == it ran but a threshold verdict failed. On a CI runner
-          # (wrong hardware, tiny dataset, aggressive per-IP auth rate limit during
-          # ramp) the threshold verdict is not authoritative; the target hardware
-          # is. So a crossed threshold is a warning, not a CI failure. Any other
-          # non-zero code means k6 could not execute and DOES fail the job.
-          if [ "$code" = "99" ]; then
-            echo "::warning::k6 thresholds crossed on CI hardware (non-gating; see load-test/README.md measurement boundary)."
-            exit 0
-          fi
-          exit $code
 
       - name: Upload load-test artifacts
         if: always()

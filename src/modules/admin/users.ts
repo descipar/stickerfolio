@@ -395,10 +395,10 @@ export async function setManagedUserRole(
  * Administrators never gain access to holdings here: no collection or holding
  * data is read or returned; only the account.deleted audit event (ids only) is
  * emitted. Users should export their data first (Roadmap 10.3); the account
- * danger zone surfaces an "export first" step and the complete, portable
- * account-data export is tracked in issue #88 (the per-collection CSV export in
- * #68 only covers missing/duplicate lists and is not a full export). Deletion
- * never blocks on export.
+ * danger zone surfaces an "export first" step and provides the complete,
+ * portable account-data export. The per-collection CSV export in #68 remains a
+ * focused missing/duplicate list rather than a full export. Deletion never
+ * blocks on export.
  *
  * Invitations: invitation-based registration (#87) is merged, so
  * `invitations.created_by_user_id` is NULLABLE with ON DELETE SET NULL.

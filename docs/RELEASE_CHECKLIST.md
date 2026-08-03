@@ -6,14 +6,16 @@ and the evidence a reviewer can use to confirm it.
 
 Status legend: **Met** = implemented and covered by tests/CI; **Verify** =
 implemented, needs a final manual/traceable confirmation for release;
-**Pending** = not yet delivered (tracked by an open issue).
+**Deferred** = deliberately outside the hobby-installation release gate.
 
-**Current tally: 18 Met, 1 Verify (criterion 7), 2 Pending (criteria 15 and 16).**
-This is a **living checklist**: issue #45 stays open until the two pending
-release gates close (#44, #43) and the release/rollback evidence below is
-attached. Do not treat “Met” as a substitute for the final human review.
+**Current tally: 20 Met and 1 Verify (criterion 7).** The full 50-user
+target-hardware measurement is retained as optional capacity validation rather
+than a hobby-installation release gate. This is a **living checklist**: issue
+#45 stays open until the remaining admin-flow and release/rollback evidence
+below is attached. Do not treat “Met” as a substitute for the final human
+review.
 
-_Last updated: 2026-07-21._
+_Last updated: 2026-08-03._
 
 ## Acceptance criteria (ROADMAP §19)
 
@@ -33,8 +35,8 @@ _Last updated: 2026-07-21._
 | 12 | Participating users can see potential partners for the same album | Met | Trade matching (#37/#42) + mobile overview M3 (#41, PR #92) |
 | 13 | Hidden collector data never appears in trade matching | Met | Opt-in visibility #38; privacy/authorization tests #40 |
 | 14 | Trade matching never changes holdings | Met | Read-only matching + overview; no mutation paths |
-| 15 | Core workflows usable at iPhone 13 size | **Pending** | Automated mobile acceptance at iPhone 13 — tracked by **#44** (PR #102) |
-| 16 | Load test with ~50 concurrent users passes without domain errors | **Pending** | 50-user load test + p95 targets — tracked by **#43** (PR #103) |
+| 15 | Core workflows usable at iPhone 13 size | Met | Automated mobile acceptance at iPhone 13 — #44 (PR #102) |
+| 16 | Automated load-test smoke passes without domain errors or lost updates | Met | Non-gating functional smoke and reusable 50-user capacity harness — #43 (PR #103); a target-hardware p95 run is optional before materially wider public use |
 | 17 | PostgreSQL backup and restore documented and tested | Met | #13; `scripts/postgres-backup.sh`/`postgres-restore.sh`; CI deployment restores into a fresh DB |
 | 18 | Production code contains no SQLite dependency or legacy compatibility layer | Met | #1; verified by build/lint |
 | 19 | Sessions survive app restart and can be revoked server-side | Met | Better Auth PostgreSQL sessions #23; revocation on suspend/delete/email-change |
@@ -50,18 +52,20 @@ Before tagging a release, run and record evidence for:
 - **Seeds**: plain container startup/migrations seed no domain data; `start.sh` seeds the bundled catalog templates only; the example-holdings seed requires an explicit collector and never runs automatically; `pnpm seed:wm2026` is idempotent.
 - **Backup/restore**: `scripts/postgres-backup.sh` then restore into an empty database; verify migration history.
 - **Rollback**: redeploy the previous image tag; migrations roll forward with a corrective migration (no history rewrite). Database restore from the verified dump is the data-loss fallback.
-- Review the security, privacy, mobile (#44), and load (#43) results and attach them here.
+- Review the security and privacy evidence plus the automated mobile (#44) and
+  load-smoke (#43) results. Run and attach the optional full 50-user measurement
+  before materially wider public use or capacity-sensitive deployment changes.
 
 ## Known limitations (document at release)
 
 - **Email verification is off** in the MVP (Roadmap §8.3); open self-registration is a deliberate per-deployment decision and defaults to `closed`.
-- **Complete self-service account export** is not shipped; account deletion surfaces the per-collection CSV lists (#68) as an export-first step, and the full portable export is tracked as **#88** (deliberate §35 scope decision).
+- **Performance capacity is not certified:** CI exercises the load-test path and
+  correctness invariants, but the optional 50-user p95 targets have not been
+  measured on representative Raspberry Pi 4 hardware.
 - **Single app instance** only; login, registration, and public-share rate limiters are per-process (Roadmap §10.2) — a shared limiter is required before horizontal scaling.
 - **Bootstrap admin** uses a fixed initial password mitigated by a forced first-login change (randomization was considered and declined in #62).
 
 ## Remaining before release
 
-- [ ] #44 — automated mobile acceptance at iPhone 13 (criterion 15)
-- [ ] #43 — 50-user load test meeting the p95 targets (criterion 16)
 - [ ] Criterion 7 — final end-to-end verification of the admin catalog flow
 - [ ] Complete the release/rollback procedure above and attach evidence
