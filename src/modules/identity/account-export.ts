@@ -210,12 +210,12 @@ async function loadAccountDataExport(
     client,
   );
   const comparisonGrantsResult = await query<ExportComparisonGrantRow>(
-    `SELECT grant.id, grant.collection_id, grant.expires_at, grant.revoked_at,
-            grant.created_at, grant.updated_at
-       FROM collection_comparison_grants grant
-       JOIN collections c ON c.id = grant.collection_id
+    `SELECT cg.id, cg.collection_id, cg.expires_at, cg.revoked_at,
+            cg.created_at, cg.updated_at
+       FROM collection_comparison_grants cg
+       JOIN collections c ON c.id = cg.collection_id
       WHERE c.collector_id = $1
-      ORDER BY grant.collection_id, grant.created_at, grant.id`,
+      ORDER BY cg.collection_id, cg.created_at, cg.id`,
     [row.collector_id],
     client,
   );

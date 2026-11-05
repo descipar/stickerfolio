@@ -73,4 +73,11 @@ export default async function globalSetup(): Promise<void> {
     storageStatePaths.newcomer,
   );
   await newcomerContext.dispose();
+
+  const partnerContext = await signIn(
+    credentials.partner.email,
+    credentials.partner.password,
+    storageStatePaths.partner,
+  );
+  await partnerContext.dispose();
 }

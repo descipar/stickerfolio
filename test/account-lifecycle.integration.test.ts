@@ -102,8 +102,8 @@ async function graphCounts(userId: string) {
           JOIN collections c ON c.id = sl.collection_id
           JOIN collector_profiles cp ON cp.id = c.collector_id
          WHERE cp.user_id = $1) AS shares,
-       (SELECT count(*)::int FROM collection_comparison_grants grant
-          JOIN collections c ON c.id = grant.collection_id
+       (SELECT count(*)::int FROM collection_comparison_grants cg
+          JOIN collections c ON c.id = cg.collection_id
           JOIN collector_profiles cp ON cp.id = c.collector_id
          WHERE cp.user_id = $1) AS "comparisonGrants",
        (SELECT count(*)::int FROM trading_preferences tp
