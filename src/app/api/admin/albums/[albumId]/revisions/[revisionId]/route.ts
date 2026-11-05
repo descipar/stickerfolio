@@ -4,7 +4,7 @@ import { z } from "zod";
 import { readLimitedJson } from "@/infrastructure/http";
 import { setAdminRevisionStatus } from "@/modules/admin";
 
-import { apiError, requestBodyTooLarge } from "../../../../../http";
+import { apiError, principalOf, requestBodyTooLarge } from "../../../../../http";
 
 const idSchema = z.uuid();
 const mutationSchema = z.object({ action: z.enum(["publish", "archive"]) });
@@ -23,9 +23,9 @@ export async function PATCH(
     return NextResponse.json({ error: "Invalid revision update." }, { status: 400 });
   }
   try {
-    await setAdminRevisionStatus(request.headers, revisionId.data, mutation.data.action);
+    await setAdminRevisionStatus(await principalOf(request), revisionId.data, mutation.data.action);
     return NextResponse.json({ updated: true });
   } catch (error) {
-    return apiError(error);
+    return apiError(error, request);
   }
 }

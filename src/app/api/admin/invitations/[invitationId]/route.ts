@@ -3,7 +3,7 @@ import { z } from "zod";
 
 import { revokeAdminInvitation } from "@/modules/admin";
 
-import { apiError } from "../../../http";
+import { apiError, principalOf } from "../../../http";
 
 const idSchema = z.uuid();
 
@@ -14,9 +14,9 @@ export async function DELETE(
   const id = idSchema.safeParse((await context.params).invitationId);
   if (!id.success) return NextResponse.json({ error: "Invitation not found." }, { status: 404 });
   try {
-    await revokeAdminInvitation(request.headers, id.data);
+    await revokeAdminInvitation(await principalOf(request), id.data);
     return NextResponse.json({ revoked: true });
   } catch (error) {
-    return apiError(error);
+    return apiError(error, request);
   }
 }

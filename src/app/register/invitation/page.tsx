@@ -3,14 +3,15 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 
 import { InvitationAcceptForm } from "@/components/invitation-accept-form";
-import { evaluateRegistration, findValidInvitationByToken, resolveIdentity } from "@/modules/identity";
+import { resolveViewer } from "@/auth";
+import { evaluateRegistration, findValidInvitationByToken } from "@/modules/identity";
 
 export default async function InvitationRegistrationPage({
   searchParams,
 }: {
   searchParams: Promise<{ token?: string }>;
 }) {
-  const identity = await resolveIdentity(await headers());
+  const identity = await resolveViewer(await headers());
   if (identity) redirect(identity.mustChangePassword ? "/password/change" : "/albums");
   const registration = evaluateRegistration();
   const { token } = await searchParams;

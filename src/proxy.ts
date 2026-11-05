@@ -2,13 +2,14 @@ import { NextResponse } from "next/server";
 
 import { getEnvironment } from "@/infrastructure/config";
 import {
+  buildContentSecurityPolicy,
+  createCspNonce,
   getRateLimitClientKey,
   InMemoryFixedWindowRateLimiter,
   isUnsafeCrossOriginRequest,
   untrustedIpSinkHeader,
 } from "@/infrastructure/http";
 
-const invitationRedemptionLimiter = new InMemoryFixedWindowRateLimiter();
 const publicShareLimiter = new InMemoryFixedWindowRateLimiter();
 
 export function proxy(request: Request): Response {
@@ -36,26 +37,20 @@ export function proxy(request: Request): Response {
     }
   }
 
-  if (request.method === "POST" && url.pathname === "/api/invitations/redeem") {
-    const decision = invitationRedemptionLimiter.consume(
-      getRateLimitClientKey(request, environment.auth.trustedIpHeader),
-      5,
-      60_000,
-    );
-    if (!decision.allowed) {
-      return NextResponse.json(
-        { error: "Too many requests. Please try again later." },
-        {
-          status: 429,
-          headers: { "Retry-After": String(decision.retryAfterSeconds) },
-        },
-      );
-    }
-  }
-
+  const contentSecurityPolicy = buildContentSecurityPolicy(
+    createCspNonce(),
+    process.env.NODE_ENV === "development",
+  );
   const requestHeaders = new Headers(request.headers);
   requestHeaders.delete(untrustedIpSinkHeader);
-  return NextResponse.next({ request: { headers: requestHeaders } });
+  // Next.js extracts the nonce from this request header and applies it to its scripts.
+  requestHeaders.set("Content-Security-Policy", contentSecurityPolicy);
+  const response = NextResponse.next({ request: { headers: requestHeaders } });
+  response.headers.set("Content-Security-Policy", contentSecurityPolicy);
+  return response;
 }
 
-export const config = { matcher: ["/api/:path*", "/share/:path*"] };
+// Every request except build assets, which carry no CSP-relevant content.
+export const config = {
+  matcher: ["/((?!_next/static|_next/image|favicon.ico).*)"],
+};

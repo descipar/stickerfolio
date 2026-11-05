@@ -1,16 +1,22 @@
+import { readFileSync } from "node:fs";
+
 import { defineConfig, globalIgnores } from "eslint/config";
 import nextVitals from "eslint-config-next/core-web-vitals";
 import nextTypeScript from "eslint-config-next/typescript";
 
-const modules = ["identity", "collectors", "catalog", "collections", "trading", "admin"];
-const dependencies = {
-  identity: [],
-  collectors: ["identity"],
-  catalog: [],
-  collections: ["collectors", "catalog"],
-  trading: ["collectors", "catalog", "collections"],
-  admin: ["identity", "collectors", "catalog"],
-};
+// Single source of the module graph and table ownership (#125); also read by
+// test/module-data-ownership.test.ts and documented in docs/ARCHITECTURE.md.
+const moduleGraph = JSON.parse(readFileSync(new URL("./src/modules/module-graph.json", import.meta.url), "utf8"));
+const dependencies = moduleGraph.dependencies;
+const modules = Object.keys(dependencies);
+
+// Modules receive a Principal; they never see HTTP, cookies, or the session library (#126).
+const deliveryOnlyImports = [
+  { name: "better-auth", message: "Only the delivery layer (src/auth) may use Better Auth." },
+  { name: "@/auth", message: "Modules receive a Principal instead of resolving sessions." },
+  { name: "next/headers", message: "Modules must not read HTTP request state." },
+  { name: "next/server", message: "Modules must not depend on the HTTP framework." },
+];
 
 const moduleBoundaryConfig = (moduleName) => {
   const allowed = new Set(dependencies[moduleName]);
@@ -38,8 +44,12 @@ const moduleBoundaryConfig = (moduleName) => {
       "no-restricted-imports": [
         "error",
         {
-          paths: disallowedRoots,
+          paths: [...disallowedRoots, ...deliveryOnlyImports],
           patterns: [
+            {
+              group: ["better-auth/*", "@/auth/*"],
+              message: "Modules receive a Principal instead of resolving sessions.",
+            },
             {
               group: disallowedRelativeRoots,
               message: `${moduleName} may not depend on this module.`,

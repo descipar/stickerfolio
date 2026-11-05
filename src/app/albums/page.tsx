@@ -4,10 +4,10 @@ import { redirect } from "next/navigation";
 
 import { AlbumsOverview } from "@/components/albums-overview";
 import { AppNavigation } from "@/components/app-navigation";
-import { resolveIdentity } from "@/modules/identity";
+import { resolveViewer } from "@/auth";
 
 export default async function AlbumsPage() {
-  const identity = await resolveIdentity(await headers());
+  const identity = await resolveViewer(await headers());
   if (!identity) redirect("/login");
   if (identity.mustChangePassword) redirect("/password/change");
   // Onboarding is enforced server-side: an authenticated collector who has not

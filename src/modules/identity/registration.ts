@@ -3,6 +3,7 @@ import type { Pool } from "pg";
 import { getEnvironment, type RegistrationMode } from "@/infrastructure/config";
 import { DatabaseError, getPool, query, withTransaction } from "@/infrastructure/database";
 import { writeLog } from "@/infrastructure/observability";
+import { createCollectorProfileForUser } from "@/modules/collectors";
 import { maximumPasswordLength, minimumPasswordLength } from "@/shared/password-policy";
 
 import { normalizeEmail } from "./email";
@@ -101,11 +102,7 @@ export async function registerOpenAccount(
         [id, id, passwordHash],
         client,
       );
-      await query(
-        "INSERT INTO collector_profiles (user_id, display_name) VALUES ($1, $2)",
-        [id, displayName],
-        client,
-      );
+      await createCollectorProfileForUser(id, displayName, client);
       return id;
     }, pool);
     writeLog("info", "identity.self_registered", { userId });

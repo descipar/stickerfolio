@@ -34,3 +34,89 @@ export async function markCollectorOnboardingComplete(
     executor,
   );
 }
+
+export interface CollectorProfile {
+  id: string;
+  displayName: string;
+  onboardingCompleted: boolean;
+}
+
+/** The collector profile that belongs to an account, if any. */
+export async function getCollectorProfileForUser(
+  userId: string,
+  executor?: QueryExecutor,
+): Promise<CollectorProfile | null> {
+  const result = await query<{ id: string; display_name: string; onboarding_completed_at: Date | null }>(
+    "SELECT id, display_name, onboarding_completed_at FROM collector_profiles WHERE user_id = $1",
+    [userId],
+    executor,
+  );
+  const row = result.rows[0];
+  return row
+    ? { id: row.id, displayName: row.display_name, onboardingCompleted: row.onboarding_completed_at !== null }
+    : null;
+}
+
+/** Creates the collector profile of a newly created account, inside the caller's transaction. */
+export async function createCollectorProfileForUser(
+  userId: string,
+  displayName: string,
+  executor?: QueryExecutor,
+): Promise<{ id: string; displayName: string }> {
+  const result = await query<{ id: string; display_name: string }>(
+    `INSERT INTO collector_profiles (user_id, display_name)
+     VALUES ($1, $2) RETURNING id, display_name`,
+    [userId, displayName],
+    executor,
+  );
+  return { id: result.rows[0]!.id, displayName: result.rows[0]!.display_name };
+}
+
+/** Creates a collector profile without an account (seeds and tests). */
+export async function createCollectorProfile(
+  displayName: string,
+  executor?: QueryExecutor,
+): Promise<{ id: string; displayName: string }> {
+  const result = await query<{ id: string; display_name: string }>(
+    "INSERT INTO collector_profiles (display_name) VALUES ($1) RETURNING id, display_name",
+    [displayName],
+    executor,
+  );
+  return { id: result.rows[0]!.id, displayName: result.rows[0]!.display_name };
+}
+
+/** The collectors module's part of the portable account export (#125). */
+export interface CollectorProfileExport {
+  id: string;
+  displayName: string;
+  createdAt: string;
+  updatedAt: string;
+  onboardingCompletedAt: string | null;
+}
+
+export async function exportCollectorProfile(
+  userId: string,
+  executor?: QueryExecutor,
+): Promise<CollectorProfileExport | null> {
+  const result = await query<{
+    id: string;
+    display_name: string;
+    created_at: Date;
+    updated_at: Date;
+    onboarding_completed_at: Date | null;
+  }>(
+    `SELECT id, display_name, created_at, updated_at, onboarding_completed_at
+       FROM collector_profiles WHERE user_id = $1`,
+    [userId],
+    executor,
+  );
+  const row = result.rows[0];
+  if (!row) return null;
+  return {
+    id: row.id,
+    displayName: row.display_name,
+    createdAt: row.created_at.toISOString(),
+    updatedAt: row.updated_at.toISOString(),
+    onboardingCompletedAt: row.onboarding_completed_at?.toISOString() ?? null,
+  };
+}

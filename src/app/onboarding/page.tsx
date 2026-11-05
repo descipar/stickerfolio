@@ -2,10 +2,10 @@ import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 
 import { OnboardingFlow } from "@/components/onboarding-flow";
-import { resolveIdentity } from "@/modules/identity";
+import { resolveViewer } from "@/auth";
 
 export default async function OnboardingPage() {
-  const identity = await resolveIdentity(await headers());
+  const identity = await resolveViewer(await headers());
   if (!identity) redirect("/login");
   if (identity.mustChangePassword) redirect("/password/change");
   // An administrator without a collector profile is never forced into collector

@@ -3,7 +3,7 @@ import { z } from "zod";
 
 import { removeOwnCollection } from "@/modules/collections";
 
-import { apiError } from "../../http";
+import { apiError, principalOf } from "../../http";
 
 const idSchema = z.uuid();
 
@@ -14,11 +14,11 @@ export async function DELETE(
   const parsed = idSchema.safeParse((await context.params).collectionId);
   if (!parsed.success) return NextResponse.json({ error: "Collection not found." }, { status: 404 });
   try {
-    const removed = await removeOwnCollection(request.headers, parsed.data);
+    const removed = await removeOwnCollection(await principalOf(request), parsed.data);
     return removed
       ? new NextResponse(null, { status: 204 })
       : NextResponse.json({ error: "Collection not found." }, { status: 404 });
   } catch (error) {
-    return apiError(error);
+    return apiError(error, request);
   }
 }

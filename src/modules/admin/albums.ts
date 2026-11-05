@@ -11,37 +11,34 @@ import {
   type ManagedAlbumSummary,
   type SeedResult,
 } from "@/modules/catalog";
-import type { StickerfolioAuth } from "@/modules/identity";
+import type { Principal } from "@/shared/principal";
 
 import { requireAdmin } from "./users";
 
 export async function listAdminAlbums(
-  headers: Headers,
-  auth?: StickerfolioAuth,
+  principal: Principal | null,
   pool: Pool = getPool(),
 ): Promise<ManagedAlbumSummary[]> {
-  await requireAdmin(headers, auth, pool);
+  requireAdmin(principal);
   return listManagedAlbums(pool);
 }
 
 export async function importAdminAlbumTemplate(
-  headers: Headers,
+  principal: Principal | null,
   template: unknown,
-  auth?: StickerfolioAuth,
   pool: Pool = getPool(),
 ): Promise<SeedResult> {
-  await requireAdmin(headers, auth, pool);
+  requireAdmin(principal);
   return importAlbumTemplate(template, pool);
 }
 
 export async function setAdminRevisionStatus(
-  headers: Headers,
+  principal: Principal | null,
   revisionId: string,
   action: "publish" | "archive",
-  auth?: StickerfolioAuth,
   pool: Pool = getPool(),
 ): Promise<void> {
-  const actor = await requireAdmin(headers, auth, pool);
+  const actor = requireAdmin(principal);
   if (action === "publish") {
     await publishRevisionAndArchiveCurrent(revisionId, pool);
   } else {
@@ -55,13 +52,12 @@ export async function setAdminRevisionStatus(
 }
 
 export async function updateAdminAlbumMetadata(
-  headers: Headers,
+  principal: Principal | null,
   albumId: string,
   revisionId: string,
   metadata: { title: string; description: string | null },
-  auth?: StickerfolioAuth,
   pool: Pool = getPool(),
 ): Promise<void> {
-  await requireAdmin(headers, auth, pool);
+  requireAdmin(principal);
   await correctAlbumMetadata(albumId, revisionId, metadata, pool);
 }

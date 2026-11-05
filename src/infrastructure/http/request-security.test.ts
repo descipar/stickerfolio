@@ -59,8 +59,36 @@ describe("sensitive endpoint rate-limit policy", () => {
     expect(limiter.consume("client", 5, 60_000, 61_000).allowed).toBe(true);
   });
 
+  it("bounds memory by sweeping expired windows and dropping the oldest active one", () => {
+    const limiter = new InMemoryFixedWindowRateLimiter(3);
+    limiter.consume("a", 5, 1_000, 0);
+    limiter.consume("b", 5, 1_000, 0);
+    limiter.consume("c", 5, 60_000, 0);
+    expect(limiter.size).toBe(3);
+
+    // a and b expired: both are swept, so the active window c survives.
+    limiter.consume("d", 5, 60_000, 2_000);
+    expect(limiter.size).toBe(2);
+    limiter.consume("e", 5, 60_000, 2_000);
+    expect(limiter.size).toBe(3);
+
+    // All active: the oldest window (c) is dropped instead of growing.
+    limiter.consume("f", 5, 60_000, 3_000);
+    expect(limiter.size).toBe(3);
+    for (let key = 0; key < 1_000; key += 1) limiter.consume(`k${key}`, 5, 60_000, 4_000);
+    expect(limiter.size).toBe(3);
+  });
+
+  it("keeps an existing exhausted window while other keys arrive", () => {
+    const limiter = new InMemoryFixedWindowRateLimiter(2);
+    limiter.consume("noisy", 1, 60_000, 0);
+    expect(limiter.consume("noisy", 1, 60_000, 1).allowed).toBe(false);
+    limiter.consume("other", 1, 60_000, 2);
+    expect(limiter.consume("noisy", 1, 60_000, 3).allowed).toBe(false);
+  });
+
   it("ignores spoofable forwarding headers unless one is explicitly trusted", () => {
-    const request = new Request("https://stickers.example.test/api/invitations/redeem", {
+    const request = new Request("https://stickers.example.test/api/register/invitation", {
       headers: { "x-forwarded-for": "203.0.113.10", "x-real-ip": "192.0.2.20" },
     });
     expect(getRateLimitClientKey(request, undefined, false)).toBe(sharedClientKey);

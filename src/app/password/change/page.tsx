@@ -3,10 +3,10 @@ import { redirect } from "next/navigation";
 
 import { LogoutButton } from "@/components/logout-button";
 import { PasswordChangeForm } from "@/components/password-change-form";
-import { resolveIdentity } from "@/modules/identity";
+import { resolveViewer } from "@/auth";
 
 export default async function ChangePasswordPage() {
-  const identity = await resolveIdentity(await headers());
+  const identity = await resolveViewer(await headers());
   if (!identity) redirect("/login");
   if (!identity.mustChangePassword) redirect("/albums");
 

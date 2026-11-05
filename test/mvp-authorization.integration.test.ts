@@ -1,5 +1,6 @@
 import { afterAll, beforeAll, describe, expect, inject, it } from "vitest";
 
+import { createAuth, resolveSessionPrincipal } from "@/auth";
 import { createPool, query } from "@/infrastructure/database";
 import {
   AdminError,
@@ -28,7 +29,6 @@ import {
   bootstrapAdminPassword,
   bootstrapInitialAdmin,
   changeOwnPassword,
-  createAuth,
   verifyPassword,
 } from "@/modules/identity";
 
@@ -87,18 +87,16 @@ describe("MVP authentication, administration, and collection authorization", () 
   it("gates the bootstrap administrator until the initial password is changed", async () => {
     const initial = await signIn(bootstrapAdminEmail, bootstrapAdminPassword);
     expect(initial.response.status).toBe(200);
-    await expect(getCollectionsOverview(initial.headers, auth, pool)).rejects.toMatchObject({
+    await expect(getCollectionsOverview(await resolveSessionPrincipal(initial.headers, auth, pool), pool)).rejects.toMatchObject({
       status: 403,
     });
-    await expect(listManagedUsers(initial.headers, auth, pool)).rejects.toBeInstanceOf(AdminError);
+    await expect(listManagedUsers(await resolveSessionPrincipal(initial.headers, auth, pool), pool)).rejects.toBeInstanceOf(AdminError);
 
     await changeOwnPassword(
-      initial.headers,
+      await resolveSessionPrincipal(initial.headers, auth, pool),
       bootstrapAdminPassword,
       "A2!bc",
-      auth,
-      pool,
-    );
+      pool);
     const initialPassword = await signIn(bootstrapAdminEmail, bootstrapAdminPassword);
     expect(initialPassword.response.status).not.toBe(200);
     const changed = await signIn(bootstrapAdminEmail, "A2!bc");
@@ -111,28 +109,28 @@ describe("MVP authentication, administration, and collection authorization", () 
       pool,
     );
     expect(admin.rows[0]?.must_change).toBe(false);
-    await expect(getCollectionsOverview(adminHeaders, auth, pool)).rejects.toBeInstanceOf(AuthenticationError);
+    await expect(getCollectionsOverview(await resolveSessionPrincipal(adminHeaders, auth, pool), pool)).rejects.toBeInstanceOf(AuthenticationError);
   });
 
   it("creates collector accounts without exposing plaintext passwords", async () => {
-    const alice = await createManagedUser(adminHeaders, {
+    const alice = await createManagedUser(await resolveSessionPrincipal(adminHeaders, auth, pool), {
       email: "alice@example.test",
       displayName: "Alice",
       initialPassword: "Alice-password-1!",
       role: "user",
-    }, auth, pool);
-    const bob = await createManagedUser(adminHeaders, {
+    }, pool);
+    const bob = await createManagedUser(await resolveSessionPrincipal(adminHeaders, auth, pool), {
       email: "bob@example.test",
       displayName: "Bob",
       initialPassword: "Bob-password-1!",
       role: "user",
-    }, auth, pool);
-    const secondaryAdmin = await createManagedUser(adminHeaders, {
+    }, pool);
+    const secondaryAdmin = await createManagedUser(await resolveSessionPrincipal(adminHeaders, auth, pool), {
       email: "other-admin@example.test",
       displayName: "Other admin",
       initialPassword: "Admin-password-1!",
       role: "admin",
-    }, auth, pool);
+    }, pool);
     aliceId = alice.id;
     bobId = bob.id;
 
@@ -152,26 +150,26 @@ describe("MVP authentication, administration, and collection authorization", () 
   });
 
   it("distinguishes duplicate accounts from other database failures", async () => {
-    await expect(createManagedUser(adminHeaders, {
+    await expect(createManagedUser(await resolveSessionPrincipal(adminHeaders, auth, pool), {
       email: "alice@example.test",
       displayName: "Duplicate Alice",
       initialPassword: "Alice-password-2!",
       role: "user",
-    }, auth, pool)).rejects.toMatchObject({ status: 409, message: "The email address is already in use." });
+    }, pool)).rejects.toMatchObject({ status: 409, message: "The email address is already in use." });
 
-    await expect(createManagedUser(adminHeaders, {
+    await expect(createManagedUser(await resolveSessionPrincipal(adminHeaders, auth, pool), {
       email: "invalid-role@example.test",
       displayName: "Invalid role",
       initialPassword: "Invalid-role-1!",
       role: "invalid" as "user",
-    }, auth, pool)).rejects.toMatchObject({ status: 503, message: "The service is temporarily unavailable." });
+    }, pool)).rejects.toMatchObject({ status: 503, message: "The service is temporarily unavailable." });
   });
 
   it("lets an administrator change only their own login email after password confirmation", async () => {
     await expect(
-      changeOwnAdminEmail(adminHeaders, "owner@example.test", "wrong-password", auth, pool),
+      changeOwnAdminEmail(await resolveSessionPrincipal(adminHeaders, auth, pool), "owner@example.test", "wrong-password", pool),
     ).rejects.toBeInstanceOf(AdminError);
-    await changeOwnAdminEmail(adminHeaders, "owner@example.test", "A2!bc", auth, pool);
+    await changeOwnAdminEmail(await resolveSessionPrincipal(adminHeaders, auth, pool), "owner@example.test", "A2!bc", pool);
     expect((await signIn(bootstrapAdminEmail, "A2!bc")).response.status).not.toBe(200);
     const changedLogin = await signIn("owner@example.test", "A2!bc");
     expect(changedLogin.response.status).toBe(200);
@@ -179,19 +177,19 @@ describe("MVP authentication, administration, and collection authorization", () 
   });
 
   it("derives collection ownership from the session and blocks IDOR attempts", async () => {
-    aliceCollectionId = (await addOwnCollection(aliceHeaders, albumId, auth, pool)).id;
-    const bobCollectionId = (await addOwnCollection(bobHeaders, albumId, auth, pool)).id;
+    aliceCollectionId = (await addOwnCollection(await resolveSessionPrincipal(aliceHeaders, auth, pool), albumId, pool)).id;
+    const bobCollectionId = (await addOwnCollection(await resolveSessionPrincipal(bobHeaders, auth, pool), albumId, pool)).id;
 
-    await setOwnHoldingQuantity(aliceHeaders, aliceCollectionId, stickerOne, 2, auth, pool);
-    await expect(getOwnCollectionStickers(aliceHeaders, aliceCollectionId, auth, pool)).resolves.toEqual(
+    await setOwnHoldingQuantity(await resolveSessionPrincipal(aliceHeaders, auth, pool), aliceCollectionId, stickerOne, 2, pool);
+    await expect(getOwnCollectionStickers(await resolveSessionPrincipal(aliceHeaders, auth, pool), aliceCollectionId, pool)).resolves.toEqual(
       expect.arrayContaining([expect.objectContaining({ id: stickerOne, quantity: 2 })]),
     );
-    await expect(getOwnCollectionStickers(bobHeaders, aliceCollectionId, auth, pool)).rejects.toBeInstanceOf(CollectionError);
-    await expect(setOwnHoldingQuantity(bobHeaders, aliceCollectionId, stickerOne, 9, auth, pool)).rejects.toBeInstanceOf(CollectionError);
-    await expect(setOwnHoldingQuantity(aliceHeaders, aliceCollectionId, crypto.randomUUID(), 1, auth, pool)).rejects.toBeInstanceOf(CollectionError);
+    await expect(getOwnCollectionStickers(await resolveSessionPrincipal(bobHeaders, auth, pool), aliceCollectionId, pool)).rejects.toBeInstanceOf(CollectionError);
+    await expect(setOwnHoldingQuantity(await resolveSessionPrincipal(bobHeaders, auth, pool), aliceCollectionId, stickerOne, 9, pool)).rejects.toBeInstanceOf(CollectionError);
+    await expect(setOwnHoldingQuantity(await resolveSessionPrincipal(aliceHeaders, auth, pool), aliceCollectionId, crypto.randomUUID(), 1, pool)).rejects.toBeInstanceOf(CollectionError);
 
-    await expect(getOwnCollectionStickers(secondaryAdminHeaders, aliceCollectionId, auth, pool)).rejects.toBeInstanceOf(CollectionError);
-    await expect(getOwnCollectionStickers(secondaryAdminHeaders, bobCollectionId, auth, pool)).rejects.toBeInstanceOf(CollectionError);
+    await expect(getOwnCollectionStickers(await resolveSessionPrincipal(secondaryAdminHeaders, auth, pool), aliceCollectionId, pool)).rejects.toBeInstanceOf(CollectionError);
+    await expect(getOwnCollectionStickers(await resolveSessionPrincipal(secondaryAdminHeaders, auth, pool), bobCollectionId, pool)).rejects.toBeInstanceOf(CollectionError);
     const stored = await query<{ quantity: number }>(
       `SELECT quantity FROM holdings WHERE collection_id = $1 AND sticker_id = $2`,
       [aliceCollectionId, stickerOne],
@@ -201,8 +199,8 @@ describe("MVP authentication, administration, and collection authorization", () 
   });
 
   it("requires administrator authorization and never returns holdings", async () => {
-    await expect(listManagedUsers(aliceHeaders, auth, pool)).rejects.toBeInstanceOf(AdminError);
-    const users = await listManagedUsers(adminHeaders, auth, pool);
+    await expect(listManagedUsers(await resolveSessionPrincipal(aliceHeaders, auth, pool), pool)).rejects.toBeInstanceOf(AdminError);
+    const users = await listManagedUsers(await resolveSessionPrincipal(adminHeaders, auth, pool), pool);
     expect(users.find((user) => user.id === aliceId)).toMatchObject({
       email: "alice@example.test",
       displayName: "Alice",
@@ -233,30 +231,28 @@ describe("MVP authentication, administration, and collection authorization", () 
       }],
     } as const;
 
-    await expect(importAdminAlbumTemplate(aliceHeaders, importedTemplate, auth, pool)).rejects.toBeInstanceOf(AdminError);
-    await expect(importAdminAlbumTemplate(adminHeaders, importedTemplate, auth, pool)).resolves.toMatchObject({
+    await expect(importAdminAlbumTemplate(await resolveSessionPrincipal(aliceHeaders, auth, pool), importedTemplate, pool)).rejects.toBeInstanceOf(AdminError);
+    await expect(importAdminAlbumTemplate(await resolveSessionPrincipal(adminHeaders, auth, pool), importedTemplate, pool)).resolves.toMatchObject({
       created: true,
       albumId: importedAlbumId,
       revisionId: importedRevisionId,
     });
-    expect(await listAdminAlbums(adminHeaders, auth, pool)).toEqual(expect.arrayContaining([
+    expect(await listAdminAlbums(await resolveSessionPrincipal(adminHeaders, auth, pool), pool)).toEqual(expect.arrayContaining([
       expect.objectContaining({
         id: importedAlbumId,
         revisions: [expect.objectContaining({ status: "draft", sectionCount: 1, stickerCount: 1 })],
       }),
     ]));
-    await expect(importAdminAlbumTemplate(adminHeaders, importedTemplate, auth, pool)).rejects.toMatchObject({ status: 409 });
+    await expect(importAdminAlbumTemplate(await resolveSessionPrincipal(adminHeaders, auth, pool), importedTemplate, pool)).rejects.toMatchObject({ status: 409 });
 
-    await setAdminRevisionStatus(adminHeaders, importedRevisionId, "publish", auth, pool);
+    await setAdminRevisionStatus(await resolveSessionPrincipal(adminHeaders, auth, pool), importedRevisionId, "publish", pool);
     await updateAdminAlbumMetadata(
-      adminHeaders,
+      await resolveSessionPrincipal(adminHeaders, auth, pool),
       importedAlbumId,
       importedRevisionId,
       { title: "Corrected album title", description: "Corrected description" },
-      auth,
-      pool,
-    );
-    const catalogState = await listAdminAlbums(adminHeaders, auth, pool);
+      pool);
+    const catalogState = await listAdminAlbums(await resolveSessionPrincipal(adminHeaders, auth, pool), pool);
     expect(catalogState.find((album) => album.id === importedAlbumId)).toMatchObject({
       title: "Corrected album title",
       revisions: [expect.objectContaining({ status: "published" })],
@@ -277,12 +273,12 @@ describe("MVP authentication, administration, and collection authorization", () 
     expect(personalData.rows[0]).toEqual({ collections: 0, holdings: 0 });
 
     const invalidAlbumId = "6bfc2e92-f40b-5eb8-905f-ece0fa10b526";
-    await expect(importAdminAlbumTemplate(adminHeaders, {
+    await expect(importAdminAlbumTemplate(await resolveSessionPrincipal(adminHeaders, auth, pool), {
       ...importedTemplate,
       album: { ...importedTemplate.album, id: invalidAlbumId, slug: "invalid-import" },
       revision: { ...importedTemplate.revision, id: "64ac798c-5984-51a6-afdf-2c63f810d07d" },
       stickers: [importedTemplate.stickers[0], { ...importedTemplate.stickers[0], stableId: crypto.randomUUID() }],
-    }, auth, pool)).rejects.toBeInstanceOf(CatalogError);
+    }, pool)).rejects.toBeInstanceOf(CatalogError);
     const partial = await query<{ count: number }>(
       "SELECT count(*)::integer AS count FROM albums WHERE id = $1",
       [invalidAlbumId],
@@ -292,20 +288,20 @@ describe("MVP authentication, administration, and collection authorization", () 
   });
 
   it("resets passwords and suspends accounts while revoking active sessions", async () => {
-    await resetManagedUserPassword(adminHeaders, bobId, "B2!bc", auth, pool);
+    await resetManagedUserPassword(await resolveSessionPrincipal(adminHeaders, auth, pool), bobId, "B2!bc", pool);
     await expect(auth.api.getSession({ headers: bobHeaders })).resolves.toBeNull();
     expect((await signIn("bob@example.test", "Bob-password-1!")).response.status).not.toBe(200);
     const resetLogin = await signIn("bob@example.test", "B2!bc");
     expect(resetLogin.response.status).toBe(200);
-    await expect(getCollectionsOverview(resetLogin.headers, auth, pool)).rejects.toMatchObject({ status: 403 });
+    await expect(getCollectionsOverview(await resolveSessionPrincipal(resetLogin.headers, auth, pool), pool)).rejects.toMatchObject({ status: 403 });
 
-    await setManagedUserStatus(adminHeaders, aliceId, "suspended", auth, pool);
+    await setManagedUserStatus(await resolveSessionPrincipal(adminHeaders, auth, pool), aliceId, "suspended", pool);
     await expect(auth.api.getSession({ headers: aliceHeaders })).resolves.toBeNull();
     expect((await signIn("alice@example.test", "Alice-password-1!")).response.status).not.toBe(200);
-    await setManagedUserStatus(adminHeaders, aliceId, "active", auth, pool);
+    await setManagedUserStatus(await resolveSessionPrincipal(adminHeaders, auth, pool), aliceId, "active", pool);
     expect((await signIn("alice@example.test", "Alice-password-1!")).response.status).toBe(200);
 
-    await setManagedUserRole(adminHeaders, bobId, "admin", auth, pool);
+    await setManagedUserRole(await resolveSessionPrincipal(adminHeaders, auth, pool), bobId, "admin", pool);
     const bob = await query<{ role: string }>(`SELECT role FROM "user" WHERE id = $1`, [bobId], pool);
     expect(bob.rows[0]?.role).toBe("admin");
   });

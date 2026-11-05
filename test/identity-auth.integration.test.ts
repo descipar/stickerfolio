@@ -1,13 +1,13 @@
 import { afterAll, beforeAll, describe, expect, inject, it } from "vitest";
 
+import { createAuth } from "@/auth";
 import { createPool, query } from "@/infrastructure/database";
+import { createCollectorProfileForUser, getCollectorProfileForUser } from "@/modules/collectors";
 import {
   bootstrapAdminEmail,
   bootstrapAdminPassword,
   bootstrapInitialAdmin,
-  createCollectorProfileForUser,
-  createAuth,
-  getIdentityContext,
+  getAccountContext,
   verifyPassword,
 } from "@/modules/identity";
 
@@ -86,10 +86,8 @@ describe("Better Auth identity foundation", () => {
 
   it("keeps login identity, roles, and optional collector profiles separate", async () => {
     const admin = await query<{ id: string }>(`SELECT id FROM "user" WHERE email = $1`, [bootstrapAdminEmail], pool);
-    await expect(getIdentityContext(admin.rows[0]!.id, pool)).resolves.toMatchObject({
-      role: "admin",
-      collector: null,
-    });
+    await expect(getAccountContext(admin.rows[0]!.id, pool)).resolves.toMatchObject({ role: "admin" });
+    await expect(getCollectorProfileForUser(admin.rows[0]!.id, pool)).resolves.toBeNull();
 
     const normalUser = await query<{ id: string }>(
       `INSERT INTO "user" (name, email, "emailVerified", role, status)
@@ -98,12 +96,10 @@ describe("Better Auth identity foundation", () => {
       pool,
     );
     await createCollectorProfileForUser(normalUser.rows[0]!.id, "Public collector name", pool);
-    const identity = await getIdentityContext(normalUser.rows[0]!.id, pool);
-    expect(identity).toMatchObject({
-      role: "user",
-      collector: { displayName: "Public collector name" },
+    await expect(getAccountContext(normalUser.rows[0]!.id, pool)).resolves.toMatchObject({ role: "user" });
+    await expect(getCollectorProfileForUser(normalUser.rows[0]!.id, pool)).resolves.toMatchObject({
+      displayName: "Public collector name",
     });
-    expect(identity?.collector?.displayName).not.toBe("collector-login@example.test");
     await expect(
       createCollectorProfileForUser(normalUser.rows[0]!.id, "Second profile", pool),
     ).rejects.toThrow();

@@ -1,9 +1,13 @@
 import { afterAll, beforeAll, describe, expect, inject, it } from "vitest";
 
+import { createAuth, resolveSessionPrincipal, resolveViewer } from "@/auth";
 import { createPool, query } from "@/infrastructure/database";
 import { seedAlbumTemplate } from "@/modules/catalog";
 import { completeOnboarding, getCollectionsOverview } from "@/modules/collections";
-import { createAuth, hashPassword, registerOpenAccount, resolveIdentity } from "@/modules/identity";
+import {
+  hashPassword,
+  registerOpenAccount,
+} from "@/modules/identity";
 
 import { createTestEnvironment } from "./create-test-environment";
 
@@ -51,12 +55,12 @@ describe("onboarding with collector profile and album selection", () => {
   afterAll(async () => pool.end());
 
   it("offers only current published revisions and creates no accidental collection", async () => {
-    const result = await completeOnboarding(collectorHeaders, { displayName: "Collector", albumIds: [] }, auth, pool);
+    const result = await completeOnboarding(await resolveSessionPrincipal(collectorHeaders, auth, pool), { displayName: "Collector", albumIds: [] }, pool);
     expect(result.collections).toHaveLength(0);
     // A deliberate zero-album completion still marks onboarding complete.
-    const identity = await resolveIdentity(collectorHeaders, auth, pool);
+    const identity = await resolveViewer(collectorHeaders, auth, pool);
     expect(identity?.collector?.onboardingCompleted).toBe(true);
-    const overview = await getCollectionsOverview(collectorHeaders, auth, pool);
+    const overview = await getCollectionsOverview(await resolveSessionPrincipal(collectorHeaders, auth, pool), pool);
     expect(overview.collections).toHaveLength(0);
     const availableIds = overview.availableAlbums.map((album) => album.id).sort();
     expect(availableIds).toEqual([publishedOne.album, publishedTwo.album].sort());
@@ -65,13 +69,11 @@ describe("onboarding with collector profile and album selection", () => {
 
   it("creates multiple collections atomically and confirms the display name", async () => {
     const result = await completeOnboarding(
-      collectorHeaders,
+      await resolveSessionPrincipal(collectorHeaders, auth, pool),
       { displayName: "Renamed Collector", albumIds: [publishedOne.album, publishedTwo.album] },
-      auth,
-      pool,
-    );
+      pool);
     expect(result.collections).toHaveLength(2);
-    const overview = await getCollectionsOverview(collectorHeaders, auth, pool);
+    const overview = await getCollectionsOverview(await resolveSessionPrincipal(collectorHeaders, auth, pool), pool);
     expect(overview.collections).toHaveLength(2);
     const profile = await query<{ display_name: string }>(
       `SELECT cp.display_name FROM collector_profiles cp JOIN "user" u ON u.id = cp.user_id WHERE u.email = $1`,
@@ -88,15 +90,15 @@ describe("onboarding with collector profile and album selection", () => {
       "open",
     );
     const beforeHeaders = await signIn("returning@example.test", "Returning-1!");
-    const before = await resolveIdentity(beforeHeaders, auth, pool);
+    const before = await resolveViewer(beforeHeaders, auth, pool);
     expect(before?.collector?.onboardingCompleted).toBe(false);
 
-    await completeOnboarding(beforeHeaders, { displayName: "Returning", albumIds: [] }, auth, pool);
+    await completeOnboarding(await resolveSessionPrincipal(beforeHeaders, auth, pool), { displayName: "Returning", albumIds: [] }, pool);
 
     // A fresh sign-in (new session) still observes the persisted completion, so
     // a later sign-in can never bypass onboarding until it is actually done.
     const afterHeaders = await signIn("returning@example.test", "Returning-1!");
-    const after = await resolveIdentity(afterHeaders, auth, pool);
+    const after = await resolveViewer(afterHeaders, auth, pool);
     expect(after?.collector?.onboardingCompleted).toBe(true);
   });
 
@@ -107,15 +109,15 @@ describe("onboarding with collector profile and album selection", () => {
       "open",
     );
     const headers = await signIn("resubmit@example.test", "Resubmit-1!");
-    await completeOnboarding(headers, { displayName: "Resubmit", albumIds: [publishedOne.album] }, auth, pool);
+    await completeOnboarding(await resolveSessionPrincipal(headers, auth, pool), { displayName: "Resubmit", albumIds: [publishedOne.album] }, pool);
 
     // Do not rely on the UI's available-album list: submit the already-owned
     // album id directly. The unique constraint must surface as a domain 409.
     await expect(
-      completeOnboarding(headers, { displayName: "Resubmit", albumIds: [publishedOne.album] }, auth, pool),
+      completeOnboarding(await resolveSessionPrincipal(headers, auth, pool), { displayName: "Resubmit", albumIds: [publishedOne.album] }, pool),
     ).rejects.toMatchObject({ status: 409 });
 
-    const overview = await getCollectionsOverview(headers, auth, pool);
+    const overview = await getCollectionsOverview(await resolveSessionPrincipal(headers, auth, pool), pool);
     expect(overview.collections).toHaveLength(1);
   });
 
@@ -135,7 +137,7 @@ describe("onboarding with collector profile and album selection", () => {
     );
     const adminHeaders = await signIn("admin-onboard@example.test", "Admin-pass-1!");
     await expect(
-      completeOnboarding(adminHeaders, { displayName: "Nope", albumIds: [publishedOne.album] }, auth, pool),
+      completeOnboarding(await resolveSessionPrincipal(adminHeaders, auth, pool), { displayName: "Nope", albumIds: [publishedOne.album] }, pool),
     ).rejects.toMatchObject({ status: 403 });
     const collections = await query<{ count: string }>(
       `SELECT count(*)::text AS count FROM collections c

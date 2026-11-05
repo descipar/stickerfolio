@@ -3,10 +3,11 @@ import { redirect } from "next/navigation";
 
 import { AdminRegistration } from "@/components/admin-registration";
 import { AppNavigation } from "@/components/app-navigation";
-import { evaluateRegistration, resolveIdentity } from "@/modules/identity";
+import { resolveViewer } from "@/auth";
+import { evaluateRegistration } from "@/modules/identity";
 
 export default async function AdminRegistrationPage() {
-  const identity = await resolveIdentity(await headers());
+  const identity = await resolveViewer(await headers());
   if (!identity) redirect("/login");
   if (identity.mustChangePassword) redirect("/password/change");
   if (identity.role !== "admin") redirect("/albums");

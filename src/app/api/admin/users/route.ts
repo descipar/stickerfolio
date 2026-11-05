@@ -5,7 +5,7 @@ import { readLimitedJson } from "@/infrastructure/http";
 import { createManagedUser, listManagedUsers } from "@/modules/admin";
 import { maximumPasswordLength, minimumPasswordLength } from "@/shared/password-policy";
 
-import { apiError, requestBodyTooLarge } from "../../http";
+import { apiError, principalOf, requestBodyTooLarge } from "../../http";
 
 const createSchema = z.object({
   email: z.email().max(254),
@@ -16,9 +16,9 @@ const createSchema = z.object({
 
 export async function GET(request: Request): Promise<NextResponse> {
   try {
-    return NextResponse.json({ users: await listManagedUsers(request.headers) });
+    return NextResponse.json({ users: await listManagedUsers(await principalOf(request)) });
   } catch (error) {
-    return apiError(error);
+    return apiError(error, request);
   }
 }
 
@@ -29,10 +29,10 @@ export async function POST(request: Request): Promise<NextResponse> {
   if (!body.success) return NextResponse.json({ error: "Invalid account details." }, { status: 400 });
   try {
     return NextResponse.json(
-      await createManagedUser(request.headers, body.data),
+      await createManagedUser(await principalOf(request), body.data),
       { status: 201 },
     );
   } catch (error) {
-    return apiError(error);
+    return apiError(error, request);
   }
 }

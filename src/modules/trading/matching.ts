@@ -1,7 +1,7 @@
 import type { Pool } from "pg";
 
 import { getPool, query, withTransaction, type QueryExecutor } from "@/infrastructure/database";
-import { requireCollectorContext } from "@/modules/collectors";
+import { type Principal, requireCollectorPrincipal } from "@/shared/principal";
 
 export type TradeDirection = "all" | "one-way" | "two-way";
 export type TradeSort = "compatibility" | "offered" | "wanted" | "name";
@@ -322,20 +322,18 @@ export async function calculateTradeMatches(
   };
 }
 
-type CollectorAuth = Parameters<typeof requireCollectorContext>[1];
 
 export async function getOwnTradeMatches(
-  headers: Headers,
+  principal: Principal | null,
   collectionId: string,
   options: TradeMatchOptions = {},
-  auth?: CollectorAuth,
   pool: Pool = getPool(),
 ): Promise<TradeMatchResult> {
-  const identity = await requireCollectorContext(headers, auth, pool);
+  const identity = requireCollectorPrincipal(principal);
   // Summary counts and page details are separate statements; one read-only
   // snapshot keeps them consistent under concurrent holding updates.
   return withTransaction(async (client) => {
     await query("SET TRANSACTION ISOLATION LEVEL REPEATABLE READ READ ONLY", [], client);
-    return calculateTradeMatches(identity.collector.id, collectionId, options, client);
+    return calculateTradeMatches(identity.collectorId, collectionId, options, client);
   }, pool);
 }

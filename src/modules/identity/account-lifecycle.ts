@@ -2,12 +2,11 @@ import type { Pool, PoolClient } from "pg";
 
 import { getPool, query, withTransaction, type QueryExecutor } from "@/infrastructure/database";
 import { writeAuditEvent } from "@/infrastructure/observability";
+import { type Principal, requirePrincipal } from "@/shared/principal";
 
 import { lockAdministratorsForMutation } from "./administrator-lock";
-import { getAuth, type StickerfolioAuth } from "./auth";
 import { normalizeEmail } from "./email";
 import { verifyPassword } from "./password";
-import { requireIdentity } from "./session";
 
 export class AccountLifecycleError extends Error {
   constructor(
@@ -71,12 +70,11 @@ async function assertNotLastAdministrator(client: PoolClient, userId: string): P
  * identified from the session only, never from a client-supplied id.
  */
 export async function deactivateOwnAccount(
-  headers: Headers,
+  principal: Principal | null,
   currentPassword: string,
-  auth: StickerfolioAuth = getAuth(),
   pool: Pool = getPool(),
 ): Promise<void> {
-  const identity = await requireIdentity(headers, auth, pool);
+  const identity = requirePrincipal(principal);
   await verifyOwnPassword(identity.userId, currentPassword, pool);
   await withTransaction(async (client) => {
     await assertNotLastAdministrator(client, identity.userId);
@@ -122,13 +120,12 @@ export async function deactivateOwnAccount(
  * account-lifecycle integration tests.
  */
 export async function deleteOwnAccount(
-  headers: Headers,
+  principal: Principal | null,
   currentPassword: string,
   confirmationEmail: string,
-  auth: StickerfolioAuth = getAuth(),
   pool: Pool = getPool(),
 ): Promise<void> {
-  const identity = await requireIdentity(headers, auth, pool);
+  const identity = requirePrincipal(principal);
   await verifyOwnPassword(identity.userId, currentPassword, pool);
   await withTransaction(async (client) => {
     await assertNotLastAdministrator(client, identity.userId);

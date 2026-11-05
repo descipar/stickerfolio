@@ -5,8 +5,8 @@ import {
   seedExampleHoldings,
   type ExampleHoldingsDataset,
 } from "@/modules/collections";
-import { markCollectorOnboardingComplete } from "@/modules/collectors";
-import { createCollectorProfileForUser, hashPassword, normalizeEmail } from "@/modules/identity";
+import { createCollectorProfileForUser, markCollectorOnboardingComplete } from "@/modules/collectors";
+import { hashPassword, normalizeEmail } from "@/modules/identity";
 import { setTradingVisibility } from "@/modules/trading";
 
 /**

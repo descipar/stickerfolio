@@ -4,15 +4,15 @@ import { z } from "zod";
 import { readLimitedJson } from "@/infrastructure/http";
 import { getOwnTradingVisibility, setOwnTradingVisibility } from "@/modules/trading";
 
-import { apiError, requestBodyTooLarge } from "../../http";
+import { apiError, principalOf, requestBodyTooLarge } from "../../http";
 
 const bodySchema = z.object({ visible: z.boolean() });
 
 export async function GET(request: Request): Promise<NextResponse> {
   try {
-    return NextResponse.json({ visible: await getOwnTradingVisibility(request.headers) });
+    return NextResponse.json({ visible: await getOwnTradingVisibility(await principalOf(request)) });
   } catch (error) {
-    return apiError(error);
+    return apiError(error, request);
   }
 }
 
@@ -22,9 +22,9 @@ export async function PATCH(request: Request): Promise<NextResponse> {
   const body = bodySchema.safeParse(requestBody.status === "ok" ? requestBody.value : null);
   if (!body.success) return NextResponse.json({ error: "Invalid trading preference." }, { status: 400 });
   try {
-    await setOwnTradingVisibility(request.headers, body.data.visible);
+    await setOwnTradingVisibility(await principalOf(request), body.data.visible);
     return NextResponse.json({ visible: body.data.visible });
   } catch (error) {
-    return apiError(error);
+    return apiError(error, request);
   }
 }

@@ -38,6 +38,6 @@ export async function POST(request: Request): Promise<NextResponse> {
     await registerOpenAccount(body.data);
     return NextResponse.json({ registered: true }, { status: 201 });
   } catch (error) {
-    return apiError(error);
+    return apiError(error, request);
   }
 }

@@ -102,3 +102,32 @@ marked private and non-cacheable.
 Security-sensitive account and album-publication operations emit data-minimized structured audit events. Logs redact credentials, authentication tokens, and complete database URLs.
 
 Password hashing parameters and constrained-host measurements are documented in [Password hashing](PASSWORD_HASHING.md). Account deletion, suspension, session revocation, and audit behavior are documented in [Account lifecycle](ACCOUNT_LIFECYCLE.md).
+
+## Content Security Policy
+
+`src/proxy.ts` sets the `Content-Security-Policy` header on every page and API
+response with a fresh nonce per request. Next.js reads the nonce from the
+request header and adds it to its own scripts. `script-src` therefore allows
+only `'self'`, the nonce, and `'strict-dynamic'`, and has no
+`'unsafe-inline'`. `style-src` still allows `'unsafe-inline'` because the
+progress indicators use inline style attributes, which cannot run code. Every
+page is already rendered dynamically, so the nonce costs no static caching.
+
+## Supply chain and CI
+
+- `.github/workflows/security.yml` fails on high or critical advisories in
+  production dependencies (`pnpm audit --prod --audit-level high`) and on
+  fixable high or critical vulnerabilities in the runtime image (Trivy, pinned
+  by image digest). It also runs weekly.
+- Dependabot (`.github/dependabot.yml`) proposes weekly npm, Docker, and
+  GitHub Actions updates.
+- All GitHub Actions are pinned by commit SHA with the version in a comment.
+- The runtime and operations images remove the npm and corepack copies that
+  ship with the Node.js base image; the containers only run `node`.
+- The load-test smoke runs when trade matching, holdings, the database layer,
+  migrations, or the deployment shape change.
+
+Repository setting (not stored in the code): protect `main` and require the
+`quality`, `deployment`, `mobile-e2e`, `dependency-audit`, and `image-scan`
+checks plus one review before merging. Do not allow direct pushes; #95 and
+#121 reached `main` with failing CI.

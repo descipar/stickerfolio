@@ -8,7 +8,7 @@ import {
   updateOwnCollectionShare,
 } from "@/modules/collections";
 
-import { apiError, requestBodyTooLarge } from "../../../../http";
+import { apiError, principalOf, requestBodyTooLarge } from "../../../../http";
 
 const idSchema = z.uuid();
 const updateSchema = z
@@ -38,7 +38,7 @@ export async function PATCH(
 
   try {
     const share = await updateOwnCollectionShare(
-      request.headers,
+      await principalOf(request),
       collectionId.data,
       shareId.data,
       {
@@ -50,7 +50,7 @@ export async function PATCH(
     );
     return NextResponse.json({ share }, { headers: privateHeaders });
   } catch (error) {
-    return apiError(error);
+    return apiError(error, request);
   }
 }
 
@@ -66,7 +66,7 @@ export async function DELETE(
   }
   try {
     const revoked = await revokeOwnCollectionShare(
-      request.headers,
+      await principalOf(request),
       collectionId.data,
       shareId.data,
     );
@@ -74,6 +74,6 @@ export async function DELETE(
       ? new NextResponse(null, { status: 204, headers: privateHeaders })
       : NextResponse.json({ error: "Share link not found." }, { status: 404 });
   } catch (error) {
-    return apiError(error);
+    return apiError(error, request);
   }
 }

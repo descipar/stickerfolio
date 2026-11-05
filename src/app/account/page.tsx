@@ -5,11 +5,11 @@ import { AccountDangerZone } from "@/components/account-danger-zone";
 import { AppNavigation } from "@/components/app-navigation";
 import { EmailChangeForm } from "@/components/email-change-form";
 import { TradingPreferenceForm } from "@/components/trading-preference-form";
-import { resolveIdentity } from "@/modules/identity";
+import { resolveViewer } from "@/auth";
 import { getTradingVisibility } from "@/modules/trading";
 
 export default async function AccountPage() {
-  const identity = await resolveIdentity(await headers());
+  const identity = await resolveViewer(await headers());
   if (!identity) redirect("/login");
   if (identity.mustChangePassword) redirect("/password/change");
   const tradingVisible = identity.collector

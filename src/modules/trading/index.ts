@@ -37,3 +37,4 @@ export {
   type ComparisonSetup,
   type DirectComparisonResult,
 } from "./comparison";
+export { exportTradingDataForCollector, type TradingDataExport } from "./export";

@@ -1,12 +1,11 @@
 import type { Pool } from "pg";
 
 import { DatabaseError, getPool, query, withTransaction } from "@/infrastructure/database";
-import { writeLog } from "@/infrastructure/observability";
+import { writeAuditEvent } from "@/infrastructure/observability";
+import { type Principal, requirePrincipal } from "@/shared/principal";
 
-import { getAuth, type StickerfolioAuth } from "./auth";
 import { normalizeEmail } from "./email";
 import { verifyPassword } from "./password";
-import { requireIdentity } from "./session";
 
 export class EmailChangeError extends Error {
   constructor(
@@ -24,13 +23,12 @@ export class EmailChangeError extends Error {
  * id, so a user can never change another account's email.
  */
 export async function changeOwnEmail(
-  headers: Headers,
+  principal: Principal | null,
   newEmail: string,
   currentPassword: string,
-  auth: StickerfolioAuth = getAuth(),
   pool: Pool = getPool(),
 ): Promise<void> {
-  const identity = await requireIdentity(headers, auth, pool);
+  const identity = requirePrincipal(principal);
 
   const account = await query<{ password: string | null }>(
     `SELECT password FROM account
@@ -74,7 +72,11 @@ export async function changeOwnEmail(
     throw error;
   }
 
-  // Security-sensitive action audit. The address itself is intentionally not
-  // logged; only the affected user id and the actor are recorded.
-  writeLog("info", "identity.email_changed", { userId: identity.userId, actor: "self" });
+  // The address itself is intentionally not recorded.
+  writeAuditEvent(
+    "account.email_changed",
+    { type: "user", userId: identity.userId },
+    { type: "user", id: identity.userId },
+    { sessionsRevoked: true },
+  );
 }

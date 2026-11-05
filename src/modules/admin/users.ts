@@ -1,18 +1,25 @@
 import type { Pool, PoolClient } from "pg";
 
 import { DatabaseError, getPool, query, withTransaction } from "@/infrastructure/database";
-import { writeAuditEvent, writeLog } from "@/infrastructure/observability";
+import { writeAuditEvent } from "@/infrastructure/observability";
+import { createCollectorProfileForUser } from "@/modules/collectors";
 import {
+  deleteAccount,
   hashPassword,
+  insertCredentialAccount,
+  lockAccountEmail,
   lockAdministratorsForMutation,
   normalizeEmail,
-  requireIdentity,
-  verifyPassword,
-  type IdentityContext,
-  type StickerfolioAuth,
+  revokeAllSessions,
+  setAccountEmail,
+  setAccountPassword,
+  setAccountRole,
+  setAccountStatus,
+  verifyAccountPassword,
   type UserRole,
 } from "@/modules/identity";
 import { maximumPasswordLength, minimumPasswordLength } from "@/shared/password-policy";
+import { type Principal, requirePrincipal } from "@/shared/principal";
 
 export class AdminError extends Error {
   constructor(
@@ -37,24 +44,19 @@ export interface ManagedUser {
   createdAt: string;
 }
 
-export async function requireAdmin(
-  headers: Headers,
-  auth: StickerfolioAuth | undefined,
-  pool: Pool,
-): Promise<IdentityContext> {
-  const identity = await requireIdentity(headers, auth, pool);
-  if (identity.mustChangePassword || identity.role !== "admin") {
+export function requireAdmin(principal: Principal | null): Principal {
+  const resolved = requirePrincipal(principal);
+  if (resolved.mustChangePassword || resolved.role !== "admin") {
     throw new AdminError("Administrator access required.", 403);
   }
-  return identity;
+  return resolved;
 }
 
 export async function listManagedUsers(
-  headers: Headers,
-  auth?: StickerfolioAuth,
+  principal: Principal | null,
   pool: Pool = getPool(),
 ): Promise<ManagedUser[]> {
-  await requireAdmin(headers, auth, pool);
+  requireAdmin(principal);
   const result = await query<{
     id: string;
     email: string;
@@ -86,29 +88,17 @@ export async function listManagedUsers(
 }
 
 export async function changeOwnAdminEmail(
-  headers: Headers,
+  principal: Principal | null,
   email: string,
   currentPassword: string,
-  auth?: StickerfolioAuth,
   pool: Pool = getPool(),
 ): Promise<void> {
-  const actor = await requireAdmin(headers, auth, pool);
-  const account = await query<{ password: string | null }>(
-    `SELECT password FROM account
-      WHERE "userId" = $1 AND "providerId" = 'credential'`,
-    [actor.userId],
-    pool,
-  );
-  const passwordHash = account.rows[0]?.password;
-  if (!passwordHash || !await verifyPassword({ hash: passwordHash, password: currentPassword })) {
+  const actor = requireAdmin(principal);
+  if (!(await verifyAccountPassword(actor.userId, currentPassword, pool))) {
     throw new AdminError("The current password is incorrect.");
   }
   try {
-    await query(
-      `UPDATE "user" SET email = $1, "updatedAt" = now() WHERE id = $2`,
-      [normalizeEmail(email), actor.userId],
-      pool,
-    );
+    await setAccountEmail(actor.userId, email, pool);
   } catch (error) {
     if (error instanceof DatabaseError && error.code === "23505") {
       throw new AdminError("The email address is already in use.", 409);
@@ -118,6 +108,12 @@ export async function changeOwnAdminEmail(
     }
     throw error;
   }
+  writeAuditEvent(
+    "account.email_changed",
+    { type: "user", userId: actor.userId },
+    { type: "user", id: actor.userId },
+    { sessionsRevoked: false },
+  );
 }
 
 /**
@@ -129,23 +125,16 @@ export async function changeOwnAdminEmail(
  * address is effective immediately.
  */
 export async function setManagedUserEmail(
-  headers: Headers,
+  principal: Principal | null,
   userId: string,
   email: string,
-  auth?: StickerfolioAuth,
   pool: Pool = getPool(),
 ): Promise<void> {
-  const actor = await requireAdmin(headers, auth, pool);
-  const normalized = normalizeEmail(email);
+  const actor = requireAdmin(principal);
   try {
     await withTransaction(async (client) => {
-      const result = await query(
-        `UPDATE "user" SET email = $1, "updatedAt" = now() WHERE id = $2`,
-        [normalized, userId],
-        client,
-      );
-      if (result.rowCount !== 1) throw new AdminError("User not found.", 404);
-      await query(`DELETE FROM session WHERE "userId" = $1`, [userId], client);
+      if (!(await setAccountEmail(userId, email, client))) throw new AdminError("User not found.", 404);
+      await revokeAllSessions(userId, client);
     }, pool);
   } catch (error) {
     if (error instanceof AdminError) throw error;
@@ -157,11 +146,12 @@ export async function setManagedUserEmail(
     }
     throw error;
   }
-  writeLog("info", "identity.email_changed", {
-    userId,
-    actor: "admin",
-    actorUserId: actor.userId,
-  });
+  writeAuditEvent(
+    "account.email_changed",
+    { type: "user", userId: actor.userId },
+    { type: "user", id: userId },
+    { sessionsRevoked: true },
+  );
 }
 
 interface CreateManagedUserInput {
@@ -176,36 +166,26 @@ async function insertManagedUser(
   input: CreateManagedUserInput,
   passwordHash: string,
 ): Promise<string> {
-  const user = await query<{ id: string }>(
-    `INSERT INTO "user"
-       (name, email, "emailVerified", "mustChangePassword", role, status)
-     VALUES ($1, $2, true, true, $3, 'active')
-     RETURNING id`,
-    [input.displayName, normalizeEmail(input.email), input.role],
+  const userId = await insertCredentialAccount(
+    {
+      email: input.email,
+      name: input.displayName,
+      passwordHash,
+      role: input.role,
+      mustChangePassword: true,
+    },
     client,
   );
-  const userId = user.rows[0]!.id;
-  await query(
-    `INSERT INTO account ("accountId", "providerId", "userId", password, "createdAt", "updatedAt")
-     VALUES ($1, 'credential', $2, $3, now(), now())`,
-    [userId, userId, passwordHash],
-    client,
-  );
-  await query(
-    "INSERT INTO collector_profiles (user_id, display_name) VALUES ($1, $2)",
-    [userId, input.displayName],
-    client,
-  );
+  await createCollectorProfileForUser(userId, input.displayName, client);
   return userId;
 }
 
 export async function createManagedUser(
-  headers: Headers,
+  principal: Principal | null,
   input: CreateManagedUserInput,
-  auth?: StickerfolioAuth,
   pool: Pool = getPool(),
 ): Promise<{ id: string }> {
-  const actor = await requireAdmin(headers, auth, pool);
+  const actor = requireAdmin(principal);
   if (input.initialPassword.length < minimumPasswordLength || input.initialPassword.length > maximumPasswordLength) {
     throw new AdminError(`Passwords must contain ${minimumPasswordLength} through ${maximumPasswordLength} characters.`);
   }
@@ -231,32 +211,22 @@ export async function createManagedUser(
 }
 
 export async function resetManagedUserPassword(
-  headers: Headers,
+  principal: Principal | null,
   userId: string,
   newPassword: string,
-  auth?: StickerfolioAuth,
   pool: Pool = getPool(),
 ): Promise<void> {
-  const actor = await requireAdmin(headers, auth, pool);
+  const actor = requireAdmin(principal);
   if (actor.userId === userId) throw new AdminError("Use the account password page for your own password.");
   if (newPassword.length < minimumPasswordLength || newPassword.length > maximumPasswordLength) {
     throw new AdminError(`Passwords must contain ${minimumPasswordLength} through ${maximumPasswordLength} characters.`);
   }
   const passwordHash = await hashPassword(newPassword);
   await withTransaction(async (client) => {
-    const result = await query(
-      `UPDATE account SET password = $1, "updatedAt" = now()
-        WHERE "userId" = $2 AND "providerId" = 'credential'`,
-      [passwordHash, userId],
-      client,
-    );
-    if (result.rowCount !== 1) throw new AdminError("User not found.", 404);
-    await query(
-      `UPDATE "user" SET "mustChangePassword" = true, "updatedAt" = now() WHERE id = $1`,
-      [userId],
-      client,
-    );
-    await query(`DELETE FROM session WHERE "userId" = $1`, [userId], client);
+    if (!(await setAccountPassword(userId, passwordHash, true, client))) {
+      throw new AdminError("User not found.", 404);
+    }
+    await revokeAllSessions(userId, client);
   }, pool);
   writeAuditEvent(
     "account.password_reset",
@@ -275,13 +245,12 @@ export async function resetManagedUserPassword(
  * revalidates the actor but does not enforce the invariant.
  */
 export async function setManagedUserStatus(
-  headers: Headers,
+  principal: Principal | null,
   userId: string,
   status: UserStatus,
-  auth?: StickerfolioAuth,
   pool: Pool = getPool(),
 ): Promise<void> {
-  const actor = await requireAdmin(headers, auth, pool);
+  const actor = requireAdmin(principal);
   if (actor.userId === userId && status === "suspended") {
     throw new AdminError("Administrators cannot suspend their own account.");
   }
@@ -299,15 +268,8 @@ export async function setManagedUserStatus(
         actorNoLongerAdministrator: () => new AdminError("Administrator access required.", 403),
       },
     );
-    const result = await query(
-      `UPDATE "user" SET status = $1, "updatedAt" = now() WHERE id = $2`,
-      [status, userId],
-      client,
-    );
-    if (result.rowCount !== 1) throw new AdminError("User not found.", 404);
-    if (status === "suspended") {
-      await query(`DELETE FROM session WHERE "userId" = $1`, [userId], client);
-    }
+    if (!(await setAccountStatus(userId, status, client))) throw new AdminError("User not found.", 404);
+    if (status === "suspended") await revokeAllSessions(userId, client);
   }, pool);
   writeAuditEvent(
     "account.status_changed",
@@ -327,13 +289,12 @@ export async function setManagedUserStatus(
  * actor without enforcing the invariant.
  */
 export async function setManagedUserRole(
-  headers: Headers,
+  principal: Principal | null,
   userId: string,
   role: UserRole,
-  auth?: StickerfolioAuth,
   pool: Pool = getPool(),
 ): Promise<void> {
-  const actor = await requireAdmin(headers, auth, pool);
+  const actor = requireAdmin(principal);
   if (actor.userId === userId && role !== "admin") {
     throw new AdminError("Administrators cannot remove their own administrator role.");
   }
@@ -351,12 +312,7 @@ export async function setManagedUserRole(
         actorNoLongerAdministrator: () => new AdminError("Administrator access required.", 403),
       },
     );
-    const result = await query(
-      `UPDATE "user" SET role = $1, "updatedAt" = now() WHERE id = $2`,
-      [role, userId],
-      client,
-    );
-    if (result.rowCount !== 1) throw new AdminError("User not found.", 404);
+    if (!(await setAccountRole(userId, role, client))) throw new AdminError("User not found.", 404);
   }, pool);
   writeAuditEvent(
     "account.role_changed",
@@ -409,13 +365,12 @@ export async function setManagedUserRole(
  * account-lifecycle integration tests.
  */
 export async function deleteManagedUser(
-  headers: Headers,
+  principal: Principal | null,
   userId: string,
   confirmationEmail: string,
-  auth?: StickerfolioAuth,
   pool: Pool = getPool(),
 ): Promise<void> {
-  const actor = await requireAdmin(headers, auth, pool);
+  const actor = requireAdmin(principal);
   if (actor.userId === userId) {
     throw new AdminError("Use your account settings to delete your own account.");
   }
@@ -429,18 +384,12 @@ export async function deleteManagedUser(
         actorNoLongerAdministrator: () => new AdminError("Administrator access required.", 403),
       },
     );
-    const target = await query<{ email: string }>(
-      `SELECT email FROM "user" WHERE id = $1 FOR UPDATE`,
-      [userId],
-      client,
-    );
-    const targetRow = target.rows[0];
-    if (!targetRow) throw new AdminError("User not found.", 404);
-    if (normalizeEmail(confirmationEmail) !== targetRow.email) {
+    const targetEmail = await lockAccountEmail(userId, client);
+    if (!targetEmail) throw new AdminError("User not found.", 404);
+    if (normalizeEmail(confirmationEmail) !== targetEmail) {
       throw new AdminError("Type the exact account email to confirm deletion.");
     }
-    const deletion = await query(`DELETE FROM "user" WHERE id = $1`, [userId], client);
-    if (deletion.rowCount !== 1) throw new AdminError("User not found.", 404);
+    if (!(await deleteAccount(userId, client))) throw new AdminError("User not found.", 404);
   }, pool);
   writeAuditEvent(
     "account.deleted",

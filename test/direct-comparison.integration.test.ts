@@ -1,5 +1,6 @@
 import { afterAll, beforeAll, describe, expect, inject, it, vi } from "vitest";
 
+import { createAuth, resolveSessionPrincipal } from "@/auth";
 import { createPool, query } from "@/infrastructure/database";
 import { createManagedUser } from "@/modules/admin";
 import { archiveRevision, seedAlbumTemplate } from "@/modules/catalog";
@@ -9,7 +10,6 @@ import {
   bootstrapAdminPassword,
   bootstrapInitialAdmin,
   changeOwnPassword,
-  createAuth,
 } from "@/modules/identity";
 import {
   calculateDirectComparison,
@@ -53,6 +53,9 @@ describe("short-lived private direct collection comparisons", () => {
   let ownerHeaders: Headers;
   let viewerHeaders: Headers;
   let outsiderHeaders: Headers;
+  let secondHeaders: Headers;
+  let secondCollectorId: string;
+  let secondCollectionId: string;
   let ownerCollectorId: string;
   let viewerCollectorId: string;
   let ownerCollectionId: string;
@@ -77,12 +80,13 @@ describe("short-lived private direct collection comparisons", () => {
     }, pool);
     await bootstrapInitialAdmin(pool);
     const initialAdmin = await signIn(bootstrapAdminEmail, bootstrapAdminPassword);
-    await changeOwnPassword(initialAdmin, bootstrapAdminPassword, "Admin-secure-1!", auth, pool);
+    await changeOwnPassword(await resolveSessionPrincipal(initialAdmin, auth, pool), bootstrapAdminPassword, "Admin-secure-1!", pool);
     const adminHeaders = await signIn(bootstrapAdminEmail, "Admin-secure-1!");
     const users = await Promise.all([
-      createManagedUser(adminHeaders, { email: "owner@comparison.test", displayName: "Owner Collector", initialPassword: "Owner-secure-1!", role: "user" }, auth, pool),
-      createManagedUser(adminHeaders, { email: "viewer@comparison.test", displayName: "Viewer Collector", initialPassword: "Viewer-secure-1!", role: "user" }, auth, pool),
-      createManagedUser(adminHeaders, { email: "outsider@comparison.test", displayName: "Outsider", initialPassword: "Outsider-secure-1!", role: "user" }, auth, pool),
+      createManagedUser(await resolveSessionPrincipal(adminHeaders, auth, pool), { email: "owner@comparison.test", displayName: "Owner Collector", initialPassword: "Owner-secure-1!", role: "user" }, pool),
+      createManagedUser(await resolveSessionPrincipal(adminHeaders, auth, pool), { email: "viewer@comparison.test", displayName: "Viewer Collector", initialPassword: "Viewer-secure-1!", role: "user" }, pool),
+      createManagedUser(await resolveSessionPrincipal(adminHeaders, auth, pool), { email: "outsider@comparison.test", displayName: "Outsider", initialPassword: "Outsider-secure-1!", role: "user" }, pool),
+      createManagedUser(await resolveSessionPrincipal(adminHeaders, auth, pool), { email: "second@comparison.test", displayName: "Second Viewer", initialPassword: "Second-secure-1!", role: "user" }, pool),
     ]);
     await query(`UPDATE "user" SET "mustChangePassword" = false WHERE id = ANY($1::uuid[])`, [users.map((user) => user.id)], pool);
     const profiles = await query<{ id: string; user_id: string }>(
@@ -94,6 +98,8 @@ describe("short-lived private direct collection comparisons", () => {
     ownerCollectorId = profileFor(users[0]!.id);
     viewerCollectorId = profileFor(users[1]!.id);
     const outsiderCollectorId = profileFor(users[2]!.id);
+    secondCollectorId = profileFor(users[3]!.id);
+    secondHeaders = await signIn("second@comparison.test", "Second-secure-1!");
     ownerHeaders = await signIn("owner@comparison.test", "Owner-secure-1!");
     viewerHeaders = await signIn("viewer@comparison.test", "Viewer-secure-1!");
     outsiderHeaders = await signIn("outsider@comparison.test", "Outsider-secure-1!");
@@ -115,6 +121,7 @@ describe("short-lived private direct collection comparisons", () => {
       ],
     }, pool);
     viewerCollectionId = (await createCollection(viewerCollectorId, albumId, pool)).id;
+    secondCollectionId = (await createCollection(secondCollectorId, albumId, pool)).id;
     await setHoldingQuantity(viewerCollectorId, viewerCollectionId, stickerTwo, 2, pool);
     await setHoldingQuantity(viewerCollectorId, viewerCollectionId, stickerThree, 1, pool);
 
@@ -140,7 +147,7 @@ describe("short-lived private direct collection comparisons", () => {
 
   it("creates owner-scoped hashed credentials with a bounded lifetime", async () => {
     const output = vi.spyOn(console, "log").mockImplementation(() => undefined);
-    const created = await createOwnComparisonGrant(ownerHeaders, ownerCollectionId, auth, pool);
+    const created = await createOwnComparisonGrant(await resolveSessionPrincipal(ownerHeaders, auth, pool), ownerCollectionId, pool);
     grantId = created.grant.id;
     token = created.token;
     code = created.code;
@@ -159,29 +166,29 @@ describe("short-lived private direct collection comparisons", () => {
     expect(stored.rows[0]?.code_hash).toMatch(/^[a-f0-9]{64}$/);
     expect(JSON.stringify(stored.rows[0])).not.toContain(token);
     expect(JSON.stringify(stored.rows[0])).not.toContain(code.replace("-", ""));
-    expect(JSON.stringify(await getOwnComparisonGrants(ownerHeaders, ownerCollectionId, auth, pool))).not.toContain(token);
+    expect(JSON.stringify(await getOwnComparisonGrants(await resolveSessionPrincipal(ownerHeaders, auth, pool), ownerCollectionId, pool))).not.toContain(token);
     expect(output.mock.calls.flat().join(" ")).not.toContain(token);
     expect(output.mock.calls.flat().join(" ")).not.toContain(code);
     output.mockRestore();
 
-    await expect(getOwnComparisonGrants(viewerHeaders, ownerCollectionId, auth, pool)).rejects.toBeInstanceOf(DirectComparisonError);
-    await expect(revokeOwnComparisonGrant(viewerHeaders, ownerCollectionId, grantId, auth, pool)).resolves.toBe(false);
+    await expect(getOwnComparisonGrants(await resolveSessionPrincipal(viewerHeaders, auth, pool), ownerCollectionId, pool)).rejects.toBeInstanceOf(DirectComparisonError);
+    await expect(revokeOwnComparisonGrant(await resolveSessionPrincipal(viewerHeaders, auth, pool), ownerCollectionId, grantId, pool)).resolves.toBe(false);
   });
 
   it("prepares token and manual-code flows only for a compatible foreign collection", async () => {
-    await expect(getOwnComparisonSetup(viewerHeaders, { token }, auth, pool)).resolves.toEqual({
+    await expect(getOwnComparisonSetup(await resolveSessionPrincipal(viewerHeaders, auth, pool), { token }, pool)).resolves.toEqual({
       collections: [{
         id: viewerCollectionId,
         albumTitle: "Comparison test album",
         revisionNumber: 2,
       }],
     });
-    await expect(getOwnComparisonSetup(viewerHeaders, { code: code.toLowerCase() }, auth, pool)).resolves.toMatchObject({
+    await expect(getOwnComparisonSetup(await resolveSessionPrincipal(viewerHeaders, auth, pool), { code: code.toLowerCase() }, pool)).resolves.toMatchObject({
       collections: [{ id: viewerCollectionId }],
     });
     await expect(prepareDirectComparison(ownerCollectorId, { token }, pool)).resolves.toBeNull();
-    await expect(getOwnComparisonSetup(outsiderHeaders, { token }, auth, pool)).rejects.toBeInstanceOf(DirectComparisonError);
-    await expect(getOwnComparisonSetup(viewerHeaders, { code: "WRONG-23456" }, auth, pool)).rejects.toBeInstanceOf(DirectComparisonError);
+    await expect(getOwnComparisonSetup(await resolveSessionPrincipal(outsiderHeaders, auth, pool), { token }, pool)).rejects.toBeInstanceOf(DirectComparisonError);
+    await expect(getOwnComparisonSetup(await resolveSessionPrincipal(viewerHeaders, auth, pool), { code: "WRONG-23456" }, pool)).rejects.toBeInstanceOf(DirectComparisonError);
   });
 
   it("compares current quantities across revisions without requiring trade opt-in", async () => {
@@ -190,7 +197,7 @@ describe("short-lived private direct collection comparisons", () => {
       [],
       pool,
     );
-    const result = await getOwnDirectComparison(viewerHeaders, viewerCollectionId, { token }, auth, pool);
+    const result = await getOwnDirectComparison(await resolveSessionPrincipal(viewerHeaders, auth, pool), viewerCollectionId, { token }, pool);
     expect(result).toMatchObject({
       albumTitle: "Comparison test album",
       partnerDisplayName: "Owner Collector",
@@ -223,16 +230,85 @@ describe("short-lived private direct collection comparisons", () => {
   });
 
   it("fails foreign collection, anonymous, expired, revoked, and unknown credentials uniformly", async () => {
-    await expect(getOwnDirectComparison(viewerHeaders, unrelatedCollectionId, { token }, auth, pool)).rejects.toBeInstanceOf(DirectComparisonError);
-    await expect(getOwnDirectComparison(new Headers(), viewerCollectionId, { token }, auth, pool)).rejects.toMatchObject({ status: 401 });
+    await expect(getOwnDirectComparison(await resolveSessionPrincipal(viewerHeaders, auth, pool), unrelatedCollectionId, { token }, pool)).rejects.toBeInstanceOf(DirectComparisonError);
+    await expect(getOwnDirectComparison(null, viewerCollectionId, { token }, pool)).rejects.toMatchObject({ status: 401 });
     await expect(prepareDirectComparison(
       viewerCollectorId,
       { token },
       pool,
       new Date(Date.now() + 16 * 60 * 1000),
     )).resolves.toBeNull();
-    await expect(revokeOwnComparisonGrant(ownerHeaders, ownerCollectionId, grantId, auth, pool)).resolves.toBe(true);
-    await expect(getOwnComparisonSetup(viewerHeaders, { token }, auth, pool)).rejects.toBeInstanceOf(DirectComparisonError);
-    await expect(getOwnComparisonSetup(viewerHeaders, { token: "A".repeat(43) }, auth, pool)).rejects.toBeInstanceOf(DirectComparisonError);
+    await expect(revokeOwnComparisonGrant(await resolveSessionPrincipal(ownerHeaders, auth, pool), ownerCollectionId, grantId, pool)).resolves.toBe(true);
+    await expect(getOwnComparisonSetup(await resolveSessionPrincipal(viewerHeaders, auth, pool), { token }, pool)).rejects.toBeInstanceOf(DirectComparisonError);
+    await expect(getOwnComparisonSetup(await resolveSessionPrincipal(viewerHeaders, auth, pool), { token: "A".repeat(43) }, pool)).rejects.toBeInstanceOf(DirectComparisonError);
+  });
+
+  it("binds a grant to the first compatible recipient and audits that redemption once (#133)", async () => {
+    const created = await createOwnComparisonGrant(await resolveSessionPrincipal(ownerHeaders, auth, pool), ownerCollectionId, pool);
+    const output = vi.spyOn(console, "log").mockImplementation(() => undefined);
+
+    // Opening the code without a compatible album does not consume it.
+    await expect(getOwnComparisonSetup(await resolveSessionPrincipal(outsiderHeaders, auth, pool), { token: created.token }, pool))
+      .rejects.toBeInstanceOf(DirectComparisonError);
+    const unbound = (await getOwnComparisonGrants(await resolveSessionPrincipal(ownerHeaders, auth, pool), ownerCollectionId, pool))
+      .find((grant) => grant.id === created.grant.id);
+    expect(unbound?.redeemedAt).toBeNull();
+
+    await expect(getOwnComparisonSetup(await resolveSessionPrincipal(viewerHeaders, auth, pool), { code: created.code }, pool))
+      .resolves.toMatchObject({ collections: [{ id: viewerCollectionId }] });
+    await expect(getOwnDirectComparison(await resolveSessionPrincipal(viewerHeaders, auth, pool), viewerCollectionId, { token: created.token }, pool))
+      .resolves.toMatchObject({ partnerDisplayName: "Owner Collector" });
+
+    await expect(getOwnComparisonSetup(await resolveSessionPrincipal(secondHeaders, auth, pool), { token: created.token }, pool))
+      .rejects.toBeInstanceOf(DirectComparisonError);
+    await expect(getOwnDirectComparison(await resolveSessionPrincipal(secondHeaders, auth, pool), secondCollectionId, { code: created.code }, pool))
+      .rejects.toBeInstanceOf(DirectComparisonError);
+
+    const events = output.mock.calls
+      .map(([line]) => JSON.parse(String(line)) as { event: string; audit?: { action: string; targetId: string } })
+      .filter((entry) => entry.event === "security.audit")
+      .map((entry) => entry.audit);
+    expect(events).toEqual([
+      expect.objectContaining({ action: "comparison_grant.redeemed", targetId: created.grant.id }),
+    ]);
+    output.mockRestore();
+
+    const bound = (await getOwnComparisonGrants(await resolveSessionPrincipal(ownerHeaders, auth, pool), ownerCollectionId, pool))
+      .find((grant) => grant.id === created.grant.id);
+    expect(bound).toMatchObject({ status: "active", redeemedAt: expect.any(String) });
+    const stored = await query<{ recipient_collector_id: string }>(
+      "SELECT recipient_collector_id FROM collection_comparison_grants WHERE id = $1",
+      [created.grant.id],
+      pool,
+    );
+    expect(stored.rows[0]?.recipient_collector_id).toBe(viewerCollectorId);
+  });
+
+  it("lets exactly one of two concurrent first redemptions win", async () => {
+    vi.spyOn(console, "log").mockImplementation(() => undefined);
+    const created = await createOwnComparisonGrant(await resolveSessionPrincipal(ownerHeaders, auth, pool), ownerCollectionId, pool);
+    const results = await Promise.all([
+      prepareDirectComparison(viewerCollectorId, { token: created.token }, pool),
+      prepareDirectComparison(secondCollectorId, { token: created.token }, pool),
+    ]);
+    expect(results.filter((result) => result !== null)).toHaveLength(1);
+    vi.restoreAllMocks();
+  });
+
+  it("stops a bound grant on revocation and expiry", async () => {
+    vi.spyOn(console, "log").mockImplementation(() => undefined);
+    const created = await createOwnComparisonGrant(await resolveSessionPrincipal(ownerHeaders, auth, pool), ownerCollectionId, pool);
+    await expect(prepareDirectComparison(viewerCollectorId, { token: created.token }, pool)).resolves.not.toBeNull();
+
+    const afterExpiry = new Date(Date.now() + 16 * 60 * 1000);
+    await expect(prepareDirectComparison(viewerCollectorId, { token: created.token }, pool, afterExpiry)).resolves.toBeNull();
+    await expect(
+      calculateDirectComparison(viewerCollectorId, viewerCollectionId, { token: created.token }, pool, afterExpiry),
+    ).resolves.toBeNull();
+
+    await expect(revokeOwnComparisonGrant(await resolveSessionPrincipal(ownerHeaders, auth, pool), ownerCollectionId, created.grant.id, pool)).resolves.toBe(true);
+    await expect(getOwnDirectComparison(await resolveSessionPrincipal(viewerHeaders, auth, pool), viewerCollectionId, { token: created.token }, pool))
+      .rejects.toBeInstanceOf(DirectComparisonError);
+    vi.restoreAllMocks();
   });
 });

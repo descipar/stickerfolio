@@ -11,17 +11,41 @@
 # genuine domain-error, write-consistency, or failed-check signal and fails the
 # workflow.
 #
-# This workflow is separate from ci.yml on purpose so the existing quality and
-# deployment jobs are unaffected and this check is not a required merge gate.
+# This workflow is separate from ci.yml so its path filter does not delay the
+# quality jobs. Because it is path-filtered it cannot be a required status
+# check; reviewers must treat a red or missing run on a matching PR as blocking.
 name: Load test smoke
 
 on:
   workflow_dispatch:
+  # Runs whenever trade matching, holdings, schema, or the deployment shape
+  # change (#134), not only when the load test itself changes.
   pull_request:
     branches: [main]
     paths:
       - "load-test/**"
       - ".github/workflows/load-test-smoke.yml"
+      - "src/modules/trading/**"
+      - "src/modules/collections/**"
+      - "src/infrastructure/database/**"
+      - "migrations/**"
+      - "Dockerfile"
+      - "compose.yml"
+      - "package.json"
+      - "pnpm-lock.yaml"
+  push:
+    branches: [main]
+    paths:
+      - "load-test/**"
+      - ".github/workflows/load-test-smoke.yml"
+      - "src/modules/trading/**"
+      - "src/modules/collections/**"
+      - "src/infrastructure/database/**"
+      - "migrations/**"
+      - "Dockerfile"
+      - "compose.yml"
+      - "package.json"
+      - "pnpm-lock.yaml"
 
 permissions:
   contents: read
@@ -37,11 +61,11 @@ jobs:
       DATABASE_URL: postgresql://stickerfolio:load-test-only-password@localhost:5432/stickerfolio
       DATABASE_SSL_MODE: disable
     steps:
-      - uses: actions/checkout@v4
-      - uses: pnpm/action-setup@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: pnpm/action-setup@fc06bc1257f339d1d5d8b3a19a8cae5388b55320 # v4.4.0
         with:
           version: 11.14.0
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: 22
           cache: pnpm
@@ -101,7 +125,7 @@ jobs:
 
       - name: Upload load-test artifacts
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: load-test-smoke-results
           path: load-test/results/

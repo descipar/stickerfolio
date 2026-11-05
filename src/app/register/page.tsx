@@ -3,10 +3,11 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 
 import { RegisterForm } from "@/components/register-form";
-import { evaluateRegistration, resolveIdentity } from "@/modules/identity";
+import { resolveViewer } from "@/auth";
+import { evaluateRegistration } from "@/modules/identity";
 
 export default async function RegisterPage() {
-  const identity = await resolveIdentity(await headers());
+  const identity = await resolveViewer(await headers());
   if (identity) redirect(identity.mustChangePassword ? "/password/change" : "/albums");
   const registration = evaluateRegistration();
 

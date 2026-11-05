@@ -3,11 +3,15 @@ import { betterAuth } from "better-auth";
 
 import { getEnvironment, type AppEnvironment } from "@/infrastructure/config";
 import { getPool } from "@/infrastructure/database";
-import { query } from "@/infrastructure/database";
 import { resolveClientAddressHeader, untrustedIpSinkHeader } from "@/infrastructure/http";
+import { hashPassword, isActiveAccount, verifyPassword } from "@/modules/identity";
 import { maximumPasswordLength, minimumPasswordLength } from "@/shared/password-policy";
 
-import { hashPassword, verifyPassword } from "./password";
+/**
+ * Better Auth is the cookie-session adapter of the delivery layer (#126). It
+ * handles sign-in, sign-out, and session lookup; domain modules never import
+ * it. Accounts, passwords, and their tables belong to the identity module.
+ */
 
 export function createAuth(environment: AppEnvironment, pool: Pool) {
   return betterAuth({
@@ -56,14 +60,7 @@ export function createAuth(environment: AppEnvironment, pool: Pool) {
     databaseHooks: {
       session: {
         create: {
-          before: async (session) => {
-            const user = await query<{ status: string }>(
-              `SELECT status FROM "user" WHERE id = $1`,
-              [session.userId],
-              pool,
-            );
-            return user.rows[0]?.status === "active";
-          },
+          before: async (session) => isActiveAccount(session.userId, pool),
         },
       },
     },

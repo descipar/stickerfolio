@@ -1,7 +1,7 @@
 # Stickerfolio – Product and Architecture Roadmap
 
-Status: Draft with confirmed Phase 0 decisions
-Last updated: August 3, 2026
+Status: Phases 0 to 5 delivered (v2.0.0-rc.1); Phase 6 planned
+Last updated: November 5, 2026
 
 ## 1. Purpose of this document
 
@@ -15,30 +15,32 @@ This document includes the product plan, technical review results, and Phase 0 d
 
 ## 2. Current state
 
-Stickerfolio is currently a mobile, self-hosted Next.js application with these properties:
+Stickerfolio is a self-hosted, mobile-first Next.js application backed by
+PostgreSQL (release candidate `2.0.0-rc.1`). Phases 1 to 5 below are
+delivered:
 
-- Multiple collectors can be created and selected.
-- A collector can manage multiple albums.
-- Sticker holdings are quantity-based from `0` through `99`.
-- `0` means missing, `1` means owned, and every additional copy is a duplicate.
-- Missing, owned, and duplicate stickers can be searched and filtered.
-- Progress is displayed globally and per album section.
-- Additional albums can be imported from CSV files.
-- Holdings can be exported as CSV or JSON.
-- The interface is optimized for iPhone use.
-- There are no user accounts, authentication, or permissions.
-- The active collector is selected only through a browser cookie.
-- Data is currently stored in SQLite.
-- Prepared example holdings can be loaded explicitly through an optional seed script.
+- Email/password accounts with Better Auth, revocable PostgreSQL sessions,
+  roles (`user`, `admin`), a forced first-administrator password change, and
+  self-service password, email, deactivation, deletion, and data export.
+- Closed, invitation-only, or open registration; administrators manage users,
+  invitations, and album catalogs.
+- A shared, revisioned album catalog (Panini FIFA World Cup 2026 and Topps
+  UEFA EURO 2024 bundled) and personal collections pinned to a revision.
+- Quantities from `0` through `99` per sticker, with missing, owned, and
+  duplicate views, search, section filters, progress, and CSV exports.
+- Revocable read-only share links and short-lived direct comparisons by QR
+  code or manual code, bound to one recipient.
+- Opt-in trade matching with one-way and two-way partners, computed and
+  paginated in PostgreSQL.
+- A modular monolith with enforced import and table-ownership boundaries,
+  principals instead of HTTP headers in use cases, structured audit logs,
+  schema-aware readiness, and Docker Compose deployment with bundled or
+  external PostgreSQL.
 
-The existing source code is not the technical foundation of the rewrite. Only domain knowledge and verified source data are carried forward:
-
-- Quantities from `0` through `99` have proven to be an understandable inventory model.
-- Generic album sections work for teams, pages, and other categories.
-- Mobile search, filters, and direct quantity changes are core workflows.
-- The existing World Cup 2026 template and verified example holdings may be transferred into portable seed data.
-
-The SQLite schema, synchronous data access, previous API contracts, cookie-based collector selection, and previous directory structure will not be retained. The new application therefore requires no compatibility layer for an architecture that predates user accounts and a shared catalog.
+The earlier SQLite application without accounts was not migrated. Only its
+domain knowledge (the quantity model, generic sections, mobile workflows) and
+verified source data were carried over. Planned work is tracked in GitHub
+issues, including binding trade actions (Phase 6).
 
 ## 3. Product goal
 
@@ -667,17 +669,21 @@ Indexes are required for at least:
 - collections by collector,
 - holdings by collection,
 - holdings for one sticker across collectors,
-- duplicates with `quantity > 1`,
+- duplicates (`quantity > 1`) for one sticker across collectors,
 - active sessions by user,
 - visible trade participants.
 
-There is no partial index for `quantity = 0` because missing stickers have no holding rows. Missing stickers are found through an anti-join between the revision catalog and holdings. Duplicates use a narrow partial index for `quantity > 1`. Exact index order follows real queries and `EXPLAIN ANALYZE`.
+There is no partial index for `quantity = 0` because missing stickers have no holding rows. Missing stickers are found through an anti-join between the revision catalog and holdings. Duplicates and trade matching use the full composite index `holdings (sticker_id, quantity)`, which serves both "who holds this sticker" and "who has spare copies" lookups; a separate partial index for `quantity > 1` was not needed. Exact index order follows real queries and `EXPLAIN ANALYZE`.
 
 ### 12.3 Load test
 
-Continuous integration runs a reduced load-test smoke scenario to catch domain
-errors, lost updates, and broken test infrastructure. For a hobby installation,
-this functional smoke is sufficient for MVP release readiness.
+A reduced load-test smoke scenario catches domain errors, lost updates, and
+broken test infrastructure. It runs in its own workflow for pull requests and
+pushes that change the load test, trade matching, collections, the database
+layer, migrations, the Dockerfile, Compose, or dependencies. Because it is
+path-filtered it is not a required status check; a red or missing run on such
+a change blocks the merge by review. For a hobby installation, this functional
+smoke is sufficient for MVP release readiness.
 
 Before materially wider public use or capacity-sensitive deployment decisions,
 the full scenario should additionally be measured on representative target
@@ -959,7 +965,7 @@ The multi-user MVP is complete when:
     album view p95 below 400 ms, trade matching p95 below 1 second, and quantity
     update p95 below 200 ms. This target-hardware run is not an MVP release gate
     for a hobby installation.
-14. **First administrator:** an empty installation creates `admin@stickerfolio.local` with `admin123!` exactly once and requires a password change before further use.
+15. **First administrator:** an empty installation creates `admin@stickerfolio.local` with `admin123!` exactly once and requires a password change before further use.
 
 ## 21. Recommendation summary
 

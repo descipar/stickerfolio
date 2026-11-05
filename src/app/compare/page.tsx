@@ -4,7 +4,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 
 import { AppNavigation, DirectComparisonJoin } from "@/components";
-import { resolveIdentity } from "@/modules/identity";
+import { resolveViewer } from "@/auth";
 
 export const metadata: Metadata = {
   title: "Direct comparison · Stickerfolio",
@@ -13,7 +13,7 @@ export const metadata: Metadata = {
 };
 
 export default async function ComparePage() {
-  const identity = await resolveIdentity(await headers());
+  const identity = await resolveViewer(await headers());
   if (!identity) redirect("/login");
   if (identity.mustChangePassword) redirect("/password/change");
   if (!identity.collector) redirect(identity.role === "admin" ? "/admin/users" : "/");

@@ -2,17 +2,23 @@ import { writeLog } from "./logger";
 
 export type AuditAction =
   | "account.created"
+  | "account.email_changed"
+  | "account.exported"
+  | "account.password_changed"
   | "account.password_reset"
   | "account.role_changed"
   | "account.status_changed"
   | "account.deactivated"
   | "account.deleted"
   | "album_revision.published"
+  | "auth.sign_in_failed"
+  | "auth.sign_in_throttled"
   | "album_revision.archived"
   | "collection_share.created"
   | "collection_share.updated"
   | "collection_share.revoked"
   | "comparison_grant.created"
+  | "comparison_grant.redeemed"
   | "comparison_grant.revoked"
   | "invitation.created"
   | "invitation.revoked"
@@ -32,7 +38,8 @@ export function writeAuditEvent(
       | "collection_share"
       | "comparison_grant"
       | "invitation"
-      | "registration_mode";
+      | "registration_mode"
+      | "sign_in";
     id: string;
   },
   details: Record<string, string | boolean | number | null> = {},

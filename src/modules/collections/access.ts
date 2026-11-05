@@ -4,12 +4,13 @@ import { DatabaseError, getPool, withTransaction } from "@/infrastructure/databa
 import { listPublishedAlbums, type PublishedAlbumSummary } from "@/modules/catalog";
 import {
   markCollectorOnboardingComplete,
-  requireCollectorContext,
   updateCollectorDisplayName,
 } from "@/modules/collectors";
+import { type Principal, requireCollectorPrincipal } from "@/shared/principal";
 
 import { exportFileName, serializeCollectionExport } from "./csv";
 import {
+  changeHoldingQuantity,
   CollectionError,
   createCollection,
   listCollections,
@@ -18,11 +19,11 @@ import {
   removeCollection,
   setHoldingQuantity,
   type CollectionExportType,
+  type HoldingChange,
   type CollectionSticker,
   type CollectionSummary,
 } from "./repository";
 
-type CollectorAuth = Parameters<typeof requireCollectorContext>[1];
 
 export interface CollectionsOverview {
   collections: CollectionSummary[];
@@ -34,13 +35,12 @@ export interface OnboardingResult {
 }
 
 export async function getCollectionsOverview(
-  headers: Headers,
-  auth?: CollectorAuth,
+  principal: Principal | null,
   pool: Pool = getPool(),
 ): Promise<CollectionsOverview> {
-  const identity = await requireCollectorContext(headers, auth, pool);
+  const identity = requireCollectorPrincipal(principal);
   const [collections, albums] = await Promise.all([
-    listCollections(identity.collector.id, pool),
+    listCollections(identity.collectorId, pool),
     listPublishedAlbums(pool),
   ]);
   const activeAlbumIds = new Set(collections.map((collection) => collection.albumId));
@@ -62,12 +62,11 @@ export async function getCollectionsOverview(
  * client-supplied collector id.
  */
 export async function completeOnboarding(
-  headers: Headers,
+  principal: Principal | null,
   input: { displayName: string; albumIds: string[] },
-  auth?: CollectorAuth,
   pool: Pool = getPool(),
 ): Promise<OnboardingResult> {
-  const identity = await requireCollectorContext(headers, auth, pool);
+  const identity = requireCollectorPrincipal(principal);
   const displayName = input.displayName.trim();
   if (displayName.length < 1 || displayName.length > 100) {
     throw new CollectionError("A display name is required.");
@@ -75,10 +74,10 @@ export async function completeOnboarding(
   const albumIds = [...new Set(input.albumIds)];
   try {
     return await withTransaction(async (client) => {
-      await updateCollectorDisplayName(identity.collector.id, displayName, client);
+      await updateCollectorDisplayName(identity.collectorId, displayName, client);
       const collections: { id: string; albumId: string }[] = [];
       for (const albumId of albumIds) {
-        const created = await createCollection(identity.collector.id, albumId, client);
+        const created = await createCollection(identity.collectorId, albumId, client);
         collections.push({ id: created.id, albumId });
       }
       // Server-authoritative onboarding-completion flag, set inside the same
@@ -87,7 +86,7 @@ export async function completeOnboarding(
       // submission that re-selects an already-owned album trips the
       // collections_one_active_album unique constraint; translate that into a
       // clean domain conflict instead of leaking a 500.
-      await markCollectorOnboardingComplete(identity.collector.id, client);
+      await markCollectorOnboardingComplete(identity.collectorId, client);
       return { collections };
     }, pool);
   } catch (error) {
@@ -99,45 +98,53 @@ export async function completeOnboarding(
 }
 
 export async function addOwnCollection(
-  headers: Headers,
+  principal: Principal | null,
   albumId: string,
-  auth?: CollectorAuth,
   pool: Pool = getPool(),
 ): Promise<{ id: string; revisionId: string }> {
-  const identity = await requireCollectorContext(headers, auth, pool);
-  return createCollection(identity.collector.id, albumId, pool);
+  const identity = requireCollectorPrincipal(principal);
+  return createCollection(identity.collectorId, albumId, pool);
 }
 
 export async function removeOwnCollection(
-  headers: Headers,
+  principal: Principal | null,
   collectionId: string,
-  auth?: CollectorAuth,
   pool: Pool = getPool(),
 ): Promise<boolean> {
-  const identity = await requireCollectorContext(headers, auth, pool);
-  return removeCollection(identity.collector.id, collectionId, pool);
+  const identity = requireCollectorPrincipal(principal);
+  return removeCollection(identity.collectorId, collectionId, pool);
 }
 
 export async function getOwnCollectionStickers(
-  headers: Headers,
+  principal: Principal | null,
   collectionId: string,
-  auth?: CollectorAuth,
   pool: Pool = getPool(),
 ): Promise<CollectionSticker[]> {
-  const identity = await requireCollectorContext(headers, auth, pool);
-  return loadCollectionStickers(identity.collector.id, collectionId, pool);
+  const identity = requireCollectorPrincipal(principal);
+  return loadCollectionStickers(identity.collectorId, collectionId, pool);
 }
 
 export async function setOwnHoldingQuantity(
-  headers: Headers,
+  principal: Principal | null,
   collectionId: string,
   stickerId: string,
   quantity: number,
-  auth?: CollectorAuth,
   pool: Pool = getPool(),
 ): Promise<void> {
-  const identity = await requireCollectorContext(headers, auth, pool);
-  await setHoldingQuantity(identity.collector.id, collectionId, stickerId, quantity, pool);
+  const identity = requireCollectorPrincipal(principal);
+  await setHoldingQuantity(identity.collectorId, collectionId, stickerId, quantity, pool);
+}
+
+/** Applies a relative or checked absolute change to an own holding (#127). */
+export async function changeOwnHoldingQuantity(
+  principal: Principal | null,
+  collectionId: string,
+  stickerId: string,
+  change: HoldingChange,
+  pool: Pool = getPool(),
+): Promise<number> {
+  const identity = requireCollectorPrincipal(principal);
+  return changeHoldingQuantity(identity.collectorId, collectionId, stickerId, change, pool);
 }
 
 /**
@@ -147,13 +154,12 @@ export async function setOwnHoldingQuantity(
  * email or authentication data.
  */
 export async function exportOwnCollection(
-  headers: Headers,
+  principal: Principal | null,
   collectionId: string,
   type: CollectionExportType,
-  auth?: CollectorAuth,
   pool: Pool = getPool(),
 ): Promise<{ filename: string; content: string }> {
-  const identity = await requireCollectorContext(headers, auth, pool);
-  const data = await loadCollectionExport(identity.collector.id, collectionId, type, pool);
+  const identity = requireCollectorPrincipal(principal);
+  const data = await loadCollectionExport(identity.collectorId, collectionId, type, pool);
   return { filename: exportFileName(data), content: serializeCollectionExport(data) };
 }

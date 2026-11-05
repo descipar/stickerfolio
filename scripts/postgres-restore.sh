@@ -1,6 +1,8 @@
 #!/bin/sh
 set -eu
 
+. "$(dirname "$0")/postgres-tls.sh"
+
 usage() {
   echo "Usage: $0 --compose|--external INPUT.dump" >&2
   exit 2
@@ -21,6 +23,7 @@ case "$mode" in
   --external)
     [ -n "${DATABASE_URL:-}" ] || { echo "DATABASE_URL is required." >&2; exit 2; }
     command -v pg_restore >/dev/null 2>&1 || { echo "pg_restore is required." >&2; exit 2; }
+    stickerfolio_configure_external_tls
     pg_restore --dbname "$DATABASE_URL" --no-owner --no-acl --exit-on-error "$input"
     ;;
   *) usage ;;

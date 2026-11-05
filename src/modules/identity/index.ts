@@ -1,4 +1,3 @@
-export { createAuth, getAuth, type StickerfolioAuth } from "./auth";
 export {
   bootstrapAdminEmail,
   bootstrapAdminPassword,
@@ -6,37 +5,26 @@ export {
 } from "./bootstrap";
 export { argon2idParameters, hashPassword, verifyPassword } from "./password";
 export {
-  createCollectorProfileForUser,
-  getIdentityContext,
-  type IdentityContext,
+  getAccountContext,
+  isActiveAccount,
+  type AccountContext,
   type UserRole,
 } from "./profiles";
-export { changeOwnPassword } from "./change-password";
+export { changeOwnPassword, PasswordChangeError } from "./change-password";
 export { changeOwnEmail, EmailChangeError } from "./change-email";
 export {
   AccountLifecycleError,
   deactivateOwnAccount,
   deleteOwnAccount,
 } from "./account-lifecycle";
-export {
-  accountExportFileName,
-  accountExportFormat,
-  accountExportVersion,
-  exportOwnAccountData,
-  type AccountDataExport,
-} from "./account-export";
+export { exportAccountRecord, type AccountRecordExport } from "./export";
 export {
   lockAdministratorsForMutation,
   type AdministratorGuardErrors,
   type AdministratorLockOptions,
 } from "./administrator-lock";
 export { loginEmailSchema, normalizeEmail } from "./email";
-export {
-  AuthenticationError,
-  requireCollector,
-  requireIdentity,
-  resolveIdentity,
-} from "./session";
+export { AuthenticationError } from "@/shared/principal";
 export {
   evaluateRegistration,
   registerOpenAccount,
@@ -58,3 +46,14 @@ export {
   type InvitationStatus,
   type InvitationSummary,
 } from "./invitations";
+export {
+  deleteAccount,
+  insertCredentialAccount,
+  lockAccountEmail,
+  revokeAllSessions,
+  setAccountEmail,
+  setAccountPassword,
+  setAccountRole,
+  setAccountStatus,
+  verifyAccountPassword,
+} from "./account-store";

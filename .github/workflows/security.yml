@@ -1,0 +1,57 @@
+# Dependency audit and container image scan (#134).
+#
+# Runs on every pull request and push to main, and weekly so newly published
+# advisories surface even without code changes.
+name: Security
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+  schedule:
+    - cron: "17 5 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  dependency-audit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: pnpm/action-setup@fc06bc1257f339d1d5d8b3a19a8cae5388b55320 # v4.4.0
+        with:
+          version: 11.14.0
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Fail on high or critical advisories in production dependencies
+        run: pnpm audit --prod --audit-level high
+      - name: Report advisories in all dependencies (informational)
+        run: pnpm audit || true
+
+  image-scan:
+    runs-on: ubuntu-latest
+    env:
+      # Pinned by digest; update deliberately (Trivy 0.76.1).
+      TRIVY_IMAGE: aquasec/trivy@sha256:790fd66d1697395d8693d1acaa1ea702406a20f109b6fc7bac8db623eca6c06c
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - name: Build the runtime image
+        run: docker build --target runtime --tag stickerfolio:scan .
+      - name: Scan the runtime image for fixable high and critical vulnerabilities
+        run: |
+          docker run --rm \
+            --volume /var/run/docker.sock:/var/run/docker.sock:ro \
+            --volume "$HOME/.cache/trivy:/root/.cache/trivy" \
+            "$TRIVY_IMAGE" image \
+            --scanners vuln \
+            --severity HIGH,CRITICAL \
+            --ignore-unfixed \
+            --exit-code 1 \
+            --no-progress \
+            stickerfolio:scan

@@ -10,7 +10,7 @@ import {
   type QueryExecutor,
 } from "@/infrastructure/database";
 import { writeAuditEvent } from "@/infrastructure/observability";
-import { requireCollectorContext } from "@/modules/collectors";
+import { type Principal, requireCollectorPrincipal } from "@/shared/principal";
 
 import type { TradeSticker } from "./matching";
 
@@ -26,6 +26,8 @@ export interface ComparisonGrantSummary {
   expiresAt: string;
   revokedAt: string | null;
   createdAt: string;
+  /** Set once a collector has redeemed the grant; it is then bound to them (#133). */
+  redeemedAt: string | null;
 }
 
 export interface ComparisonCredential {
@@ -58,13 +60,19 @@ interface GrantRow {
   expires_at: Date;
   revoked_at: Date | null;
   created_at: Date;
+  redeemed_at: Date | null;
 }
 
 interface ActiveGrantRow {
+  grant_id: string;
   collection_id: string;
   owner_collector_id: string;
   album_id: string;
+  recipient_collector_id: string | null;
 }
+
+/** Called once, when a grant becomes bound to its recipient. */
+export type GrantRedeemedListener = (grantId: string) => void;
 
 interface DirectMatchRow {
   viewer_code: string;
@@ -77,7 +85,6 @@ interface DirectMatchRow {
   partner_quantity: number;
 }
 
-type CollectorAuth = Parameters<typeof requireCollectorContext>[1];
 
 export class DirectComparisonError extends Error {
   readonly status = 404;
@@ -120,6 +127,7 @@ function toGrantSummary(row: GrantRow, now: Date): ComparisonGrantSummary {
     expiresAt: row.expires_at.toISOString(),
     revokedAt: row.revoked_at?.toISOString() ?? null,
     createdAt: row.created_at.toISOString(),
+    redeemedAt: row.redeemed_at?.toISOString() ?? null,
   };
 }
 
@@ -156,7 +164,8 @@ async function loadActiveGrant(
   const hashes = credentialHashes(credential);
   if (!hashes) return null;
   const result = await query<ActiveGrantRow>(
-    `SELECT c.id AS collection_id, c.collector_id AS owner_collector_id, c.album_id
+    `SELECT cg.id AS grant_id, c.id AS collection_id, c.collector_id AS owner_collector_id,
+            c.album_id, cg.recipient_collector_id
        FROM collection_comparison_grants cg
        JOIN collections c ON c.id = cg.collection_id
        JOIN active_collector_profiles owner ON owner.id = c.collector_id
@@ -169,6 +178,54 @@ async function loadActiveGrant(
     executor,
   );
   return result.rows[0] ?? null;
+}
+
+function usableBy(grant: ActiveGrantRow, viewerCollectorId: string): boolean {
+  if (grant.owner_collector_id === viewerCollectorId) return false;
+  return grant.recipient_collector_id === null || grant.recipient_collector_id === viewerCollectorId;
+}
+
+/**
+ * Loads an active grant for the viewer and binds it to them on first use
+ * (#133). A grant is only bound when the viewer has a compatible collection,
+ * so opening a code without the album does not consume it. The conditional
+ * UPDATE makes concurrent first redemptions race safely: exactly one
+ * collector wins, everyone else sees an unavailable comparison.
+ */
+async function redeemGrant(
+  viewerCollectorId: string,
+  credential: ComparisonCredential,
+  executor: QueryExecutor,
+  now: Date,
+  onRedeemed?: GrantRedeemedListener,
+): Promise<ActiveGrantRow | null> {
+  const grant = await loadActiveGrant(credential, now, executor);
+  if (!grant || !usableBy(grant, viewerCollectorId)) return null;
+  if (grant.recipient_collector_id === viewerCollectorId) return grant;
+
+  const compatible = await query(
+    `SELECT 1 FROM collections
+      WHERE collector_id = $1 AND album_id = $2 AND status = 'active'
+      LIMIT 1`,
+    [viewerCollectorId, grant.album_id],
+    executor,
+  );
+  if (compatible.rowCount === 0) return null;
+
+  const bound = await query(
+    `UPDATE collection_comparison_grants
+        SET recipient_collector_id = $2, redeemed_at = $3, updated_at = $3
+      WHERE id = $1 AND recipient_collector_id IS NULL
+        AND revoked_at IS NULL AND expires_at > $3`,
+    [grant.grant_id, viewerCollectorId, now],
+    executor,
+  );
+  if (bound.rowCount === 1) {
+    onRedeemed?.(grant.grant_id);
+    return { ...grant, recipient_collector_id: viewerCollectorId };
+  }
+  const current = await loadActiveGrant(credential, now, executor);
+  return current?.recipient_collector_id === viewerCollectorId ? current : null;
 }
 
 async function insertComparisonGrant(
@@ -184,7 +241,7 @@ async function insertComparisonGrant(
      SELECT c.id, $3, $4, $5
        FROM collections c
       WHERE c.id = $1 AND c.collector_id = $2 AND c.status = 'active'
-     RETURNING id, expires_at, revoked_at, created_at`,
+     RETURNING id, expires_at, revoked_at, created_at, redeemed_at`,
     [collectionId, collectorId, hashCredential(token), hashCredential(code), expiresAt],
     executor,
   );
@@ -234,7 +291,7 @@ export async function listComparisonGrants(
   );
   if (collection.rowCount !== 1) throw new DirectComparisonError();
   const result = await query<GrantRow>(
-    `SELECT cg.id, cg.expires_at, cg.revoked_at, cg.created_at
+    `SELECT cg.id, cg.expires_at, cg.revoked_at, cg.created_at, cg.redeemed_at
        FROM collection_comparison_grants cg
       WHERE cg.collection_id = $1
       ORDER BY cg.created_at DESC, cg.id`,
@@ -271,9 +328,10 @@ export async function prepareDirectComparison(
   credential: ComparisonCredential,
   executor: QueryExecutor = getPool(),
   now = new Date(),
+  onRedeemed?: GrantRedeemedListener,
 ): Promise<ComparisonSetup | null> {
-  const grant = await loadActiveGrant(credential, now, executor);
-  if (!grant || grant.owner_collector_id === viewerCollectorId) return null;
+  const grant = await redeemGrant(viewerCollectorId, credential, executor, now, onRedeemed);
+  if (!grant) return null;
   const result = await query<{
     id: string;
     album_title: string;
@@ -308,7 +366,7 @@ async function calculateDirectComparisonInTransaction(
   now: Date,
 ): Promise<DirectComparisonResult | null> {
   const grant = await loadActiveGrant(credential, now, client);
-  if (!grant || grant.owner_collector_id === viewerCollectorId) return null;
+  if (!grant || grant.recipient_collector_id !== viewerCollectorId) return null;
 
   const rows = await query<DirectMatchRow>(
     `SELECT viewer_sticker.code AS viewer_code,
@@ -402,7 +460,10 @@ export async function calculateDirectComparison(
   credential: ComparisonCredential,
   pool: Pool = getPool(),
   now = new Date(),
+  onRedeemed?: GrantRedeemedListener,
 ): Promise<DirectComparisonResult | null> {
+  // Binding writes; the comparison itself then reads one consistent snapshot.
+  if (!(await redeemGrant(viewerCollectorId, credential, pool, now, onRedeemed))) return null;
   return withTransaction(async (client) => {
     await query("SET TRANSACTION ISOLATION LEVEL REPEATABLE READ READ ONLY", [], client);
     return calculateDirectComparisonInTransaction(
@@ -415,14 +476,22 @@ export async function calculateDirectComparison(
   }, pool);
 }
 
+function auditRedemption(userId: string): GrantRedeemedListener {
+  return (grantId) =>
+    writeAuditEvent(
+      "comparison_grant.redeemed",
+      { type: "user", userId },
+      { type: "comparison_grant", id: grantId },
+    );
+}
+
 export async function createOwnComparisonGrant(
-  headers: Headers,
+  principal: Principal | null,
   collectionId: string,
-  auth?: CollectorAuth,
   pool: Pool = getPool(),
 ): Promise<{ grant: ComparisonGrantSummary; token: string; code: string }> {
-  const identity = await requireCollectorContext(headers, auth, pool);
-  const created = await createComparisonGrant(identity.collector.id, collectionId, pool);
+  const identity = requireCollectorPrincipal(principal);
+  const created = await createComparisonGrant(identity.collectorId, collectionId, pool);
   writeAuditEvent(
     "comparison_grant.created",
     { type: "user", userId: identity.userId },
@@ -433,24 +502,22 @@ export async function createOwnComparisonGrant(
 }
 
 export async function getOwnComparisonGrants(
-  headers: Headers,
+  principal: Principal | null,
   collectionId: string,
-  auth?: CollectorAuth,
   pool: Pool = getPool(),
 ): Promise<ComparisonGrantSummary[]> {
-  const identity = await requireCollectorContext(headers, auth, pool);
-  return listComparisonGrants(identity.collector.id, collectionId, pool);
+  const identity = requireCollectorPrincipal(principal);
+  return listComparisonGrants(identity.collectorId, collectionId, pool);
 }
 
 export async function revokeOwnComparisonGrant(
-  headers: Headers,
+  principal: Principal | null,
   collectionId: string,
   grantId: string,
-  auth?: CollectorAuth,
   pool: Pool = getPool(),
 ): Promise<boolean> {
-  const identity = await requireCollectorContext(headers, auth, pool);
-  const revoked = await revokeComparisonGrant(identity.collector.id, collectionId, grantId, pool);
+  const identity = requireCollectorPrincipal(principal);
+  const revoked = await revokeComparisonGrant(identity.collectorId, collectionId, grantId, pool);
   if (revoked) {
     writeAuditEvent(
       "comparison_grant.revoked",
@@ -462,30 +529,36 @@ export async function revokeOwnComparisonGrant(
 }
 
 export async function getOwnComparisonSetup(
-  headers: Headers,
+  principal: Principal | null,
   credential: ComparisonCredential,
-  auth?: CollectorAuth,
   pool: Pool = getPool(),
 ): Promise<ComparisonSetup> {
-  const identity = await requireCollectorContext(headers, auth, pool);
-  const setup = await prepareDirectComparison(identity.collector.id, credential, pool);
+  const identity = requireCollectorPrincipal(principal);
+  const setup = await prepareDirectComparison(
+    identity.collectorId,
+    credential,
+    pool,
+    new Date(),
+    auditRedemption(identity.userId),
+  );
   if (!setup) throw new DirectComparisonError();
   return setup;
 }
 
 export async function getOwnDirectComparison(
-  headers: Headers,
+  principal: Principal | null,
   collectionId: string,
   credential: ComparisonCredential,
-  auth?: CollectorAuth,
   pool: Pool = getPool(),
 ): Promise<DirectComparisonResult> {
-  const identity = await requireCollectorContext(headers, auth, pool);
+  const identity = requireCollectorPrincipal(principal);
   const result = await calculateDirectComparison(
-    identity.collector.id,
+    identity.collectorId,
     collectionId,
     credential,
     pool,
+    new Date(),
+    auditRedemption(identity.userId),
   );
   if (!result) throw new DirectComparisonError();
   return result;

@@ -1,17 +1,20 @@
 export {
+  changeHoldingQuantity,
   CollectionError,
   createCollection,
-  createCollectorProfile,
   listCollections,
   loadCollectionExport,
   loadCollectionStickers,
   removeCollection,
+  HoldingConflictError,
+  maximumHoldingQuantity,
   setHoldingQuantity,
   type CollectionExport,
   type CollectionExportSticker,
   type CollectionExportType,
   type CollectionSticker,
   type CollectionSummary,
+  type HoldingChange,
 } from "./repository";
 export { exportFileName, serializeCollectionExport, toCsv } from "./csv";
 export {
@@ -25,6 +28,7 @@ export {
   exportOwnCollection,
   getCollectionsOverview,
   getOwnCollectionStickers,
+  changeOwnHoldingQuantity,
   removeOwnCollection,
   setOwnHoldingQuantity,
   type CollectionsOverview,
@@ -49,3 +53,4 @@ export {
   type SharedSection,
   type SharedSticker,
 } from "./sharing";
+export { exportCollectionsForCollector, type CollectionDataExport } from "./export";

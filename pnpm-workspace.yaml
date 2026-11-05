@@ -8,3 +8,23 @@ allowBuilds:
   sharp: true
   ssh2: false
   unrs-resolver: true
+
+minimumReleaseAgeExclude:
+  - '@better-auth/core@1.7.18'
+  - '@better-auth/drizzle-adapter@1.7.18'
+  - '@better-auth/kysely-adapter@1.7.18'
+  - '@better-auth/memory-adapter@1.7.18'
+  - '@better-auth/mongo-adapter@1.7.18'
+  - '@better-auth/prisma-adapter@1.7.18'
+  - '@better-auth/telemetry@1.7.18'
+  - better-auth@1.7.18
+
+# Patched transitive versions within their existing major (#134). Remove an
+# entry once every parent depends on a fixed version by itself.
+overrides:
+  "baseline-browser-mapping@>=2.0.0 <2.11.0": ^2.11.0
+  "brace-expansion@>=5.0.0 <5.0.12": ^5.0.12
+  "browserslist@>=4.0.0 <4.28.7": ^4.28.7
+  "nanoid@>=3.0.0 <3.3.18": ^3.3.18
+  "source-map-js@>=1.0.0 <1.2.2": ^1.2.2
+  "vite@>=8.0.0 <8.1.6": ^8.1.6

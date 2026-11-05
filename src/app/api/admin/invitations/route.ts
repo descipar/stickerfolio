@@ -5,7 +5,7 @@ import { readLimitedJson } from "@/infrastructure/http";
 import { createAdminInvitation, listAdminInvitations } from "@/modules/admin";
 import { loginEmailSchema } from "@/modules/identity";
 
-import { apiError, requestBodyTooLarge } from "../../http";
+import { apiError, principalOf, requestBodyTooLarge } from "../../http";
 
 const createSchema = z.object({
   email: loginEmailSchema,
@@ -15,9 +15,9 @@ const createSchema = z.object({
 
 export async function GET(request: Request): Promise<NextResponse> {
   try {
-    return NextResponse.json({ invitations: await listAdminInvitations(request.headers) });
+    return NextResponse.json({ invitations: await listAdminInvitations(await principalOf(request)) });
   } catch (error) {
-    return apiError(error);
+    return apiError(error, request);
   }
 }
 
@@ -27,8 +27,8 @@ export async function POST(request: Request): Promise<NextResponse> {
   const body = createSchema.safeParse(requestBody.status === "ok" ? requestBody.value : null);
   if (!body.success) return NextResponse.json({ error: "Invalid invitation details." }, { status: 400 });
   try {
-    return NextResponse.json(await createAdminInvitation(request.headers, body.data), { status: 201 });
+    return NextResponse.json(await createAdminInvitation(await principalOf(request), body.data), { status: 201 });
   } catch (error) {
-    return apiError(error);
+    return apiError(error, request);
   }
 }

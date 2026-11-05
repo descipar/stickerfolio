@@ -29,7 +29,7 @@ export async function GET(request: Request): Promise<NextResponse> {
     if (!invitation) return NextResponse.json({ error: "Invitation not found." }, { status: 404 });
     return NextResponse.json(invitation);
   } catch (error) {
-    return apiError(error);
+    return apiError(error, request);
   }
 }
 
@@ -50,6 +50,6 @@ export async function POST(request: Request): Promise<NextResponse> {
     const result = await acceptInvitation(body.data);
     return NextResponse.json({ email: result.email }, { status: 201 });
   } catch (error) {
-    return apiError(error);
+    return apiError(error, request);
   }
 }
