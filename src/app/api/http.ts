@@ -1,12 +1,14 @@
 import { NextResponse } from "next/server";
 
+import { resolveSessionPrincipal } from "@/auth";
 import { writeLog } from "@/infrastructure/observability";
 
 import { AccountLifecycleError } from "@/modules/identity";
 import { AdminError } from "@/modules/admin";
 import { CatalogError } from "@/modules/catalog";
 import { CollectionError } from "@/modules/collections";
-import { AuthenticationError, EmailChangeError, InvitationError, RegistrationError } from "@/modules/identity";
+import { EmailChangeError, InvitationError, RegistrationError } from "@/modules/identity";
+import { AuthenticationError, type Principal } from "@/shared/principal";
 import { DirectComparisonError, TradingError } from "@/modules/trading";
 
 const identifierSegment = /^(?:[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}|[A-Za-z0-9_-]{16,})$/i;
@@ -83,6 +85,11 @@ export function apiError(error: unknown, request?: Request): NextResponse {
     error: error instanceof Error ? error : { name: typeof error, message: String(error) },
   });
   return NextResponse.json({ error: "The request could not be completed." }, { status: 500 });
+}
+
+/** Resolves the request's principal through the cookie-session adapter (#126). */
+export function principalOf(request: Request): Promise<Principal | null> {
+  return resolveSessionPrincipal(request.headers);
 }
 
 export function requestBodyTooLarge(): NextResponse {

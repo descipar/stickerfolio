@@ -3,10 +3,9 @@ import type { Pool } from "pg";
 import { getPool, query, withTransaction } from "@/infrastructure/database";
 import { writeAuditEvent } from "@/infrastructure/observability";
 import { maximumPasswordLength, minimumPasswordLength } from "@/shared/password-policy";
+import { type Principal, requirePrincipal } from "@/shared/principal";
 
-import { getAuth, type StickerfolioAuth } from "./auth";
 import { hashPassword, verifyPassword } from "./password";
-import { requireIdentitySession } from "./session";
 
 export class PasswordChangeError extends Error {
   constructor(message: string) {
@@ -23,13 +22,13 @@ export class PasswordChangeError extends Error {
  * `/change-password` endpoint is not exposed over HTTP.
  */
 export async function changeOwnPassword(
-  headers: Headers,
+  principal: Principal | null,
   currentPassword: string,
   newPassword: string,
-  auth: StickerfolioAuth = getAuth(),
   pool: Pool = getPool(),
 ): Promise<void> {
-  const { identity, sessionId } = await requireIdentitySession(headers, auth, pool);
+  const identity = requirePrincipal(principal);
+  const sessionId = identity.sessionId;
   if (newPassword.length < minimumPasswordLength || newPassword.length > maximumPasswordLength) {
     throw new PasswordChangeError("The new password does not meet the requirements.");
   }

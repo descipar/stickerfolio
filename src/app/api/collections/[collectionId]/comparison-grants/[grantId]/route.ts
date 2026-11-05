@@ -3,7 +3,7 @@ import { z } from "zod";
 
 import { revokeOwnComparisonGrant } from "@/modules/trading";
 
-import { apiError } from "../../../../http";
+import { apiError, principalOf } from "../../../../http";
 
 const idSchema = z.uuid();
 const privateHeaders = { "Cache-Control": "private, no-store" };
@@ -20,7 +20,7 @@ export async function DELETE(
   }
   try {
     const revoked = await revokeOwnComparisonGrant(
-      request.headers,
+      await principalOf(request),
       collectionId.data,
       grantId.data,
     );

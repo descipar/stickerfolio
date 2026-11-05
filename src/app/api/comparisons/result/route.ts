@@ -8,8 +8,9 @@ import {
   readLimitedJson,
 } from "@/infrastructure/http";
 import { getOwnDirectComparison } from "@/modules/trading";
+import type { Principal } from "@/shared/principal";
 
-import { apiError, requestBodyTooLarge } from "../../http";
+import { apiError, principalOf, requestBodyTooLarge } from "../../http";
 
 const requestSchema = z
   .object({
@@ -25,6 +26,7 @@ export async function handleDirectComparisonRequest(
   request: Request,
   loadComparison: typeof getOwnDirectComparison = getOwnDirectComparison,
   trustedIpHeader?: string,
+  resolvePrincipal: (request: Request) => Promise<Principal | null> = principalOf,
 ): Promise<NextResponse> {
   const key = getAuthenticatedRateLimitKey(request, trustedIpHeader);
   const decision = limiter.consume(`comparison-result:${key}`, 30, 60_000);
@@ -42,7 +44,7 @@ export async function handleDirectComparisonRequest(
   }
   try {
     const result = await loadComparison(
-      request.headers,
+      await resolvePrincipal(request),
       body.data.collectionId,
       body.data.token ? { token: body.data.token } : { code: body.data.code! },
     );

@@ -1,5 +1,6 @@
 import { afterAll, beforeAll, describe, expect, inject, it } from "vitest";
 
+import { createAuth, resolveSessionPrincipal } from "@/auth";
 import { createPool, query } from "@/infrastructure/database";
 import { createManagedUser, setManagedUserStatus } from "@/modules/admin";
 import { seedAlbumTemplate } from "@/modules/catalog";
@@ -14,7 +15,6 @@ import {
   bootstrapAdminPassword,
   bootstrapInitialAdmin,
   changeOwnPassword,
-  createAuth,
   deactivateOwnAccount,
 } from "@/modules/identity";
 import {
@@ -96,12 +96,12 @@ describe("inactive accounts are invisible to other users", () => {
     }, pool);
     await bootstrapInitialAdmin(pool);
     const initialAdmin = await signIn(bootstrapAdminEmail, bootstrapAdminPassword);
-    await changeOwnPassword(initialAdmin, bootstrapAdminPassword, "Admin-secure-1!", auth, pool);
+    await changeOwnPassword(await resolveSessionPrincipal(initialAdmin, auth, pool), bootstrapAdminPassword, "Admin-secure-1!", pool);
     adminHeaders = await signIn(bootstrapAdminEmail, "Admin-secure-1!");
 
     const users = await Promise.all([
-      createManagedUser(adminHeaders, { email: "viewer@inactive.test", displayName: "Viewer", initialPassword: "Viewer-secure-1!", role: "user" }, auth, pool),
-      createManagedUser(adminHeaders, { email: "partner@inactive.test", displayName: "Partner", initialPassword: "Partner-secure-1!", role: "user" }, auth, pool),
+      createManagedUser(await resolveSessionPrincipal(adminHeaders, auth, pool), { email: "viewer@inactive.test", displayName: "Viewer", initialPassword: "Viewer-secure-1!", role: "user" }, pool),
+      createManagedUser(await resolveSessionPrincipal(adminHeaders, auth, pool), { email: "partner@inactive.test", displayName: "Partner", initialPassword: "Partner-secure-1!", role: "user" }, pool),
     ]);
     await query(`UPDATE "user" SET "mustChangePassword" = false WHERE id = ANY($1::uuid[])`, [users.map((user) => user.id)], pool);
     partnerUserId = users[1]!.id;
@@ -133,16 +133,16 @@ describe("inactive accounts are invisible to other users", () => {
   });
 
   it("hides a partner suspended by an administrator and restores them on reactivation", async () => {
-    await setManagedUserStatus(adminHeaders, partnerUserId, "suspended", auth, pool);
+    await setManagedUserStatus(await resolveSessionPrincipal(adminHeaders, auth, pool), partnerUserId, "suspended", pool);
     expect(await partnerVisibility()).toEqual(hidden);
 
-    await setManagedUserStatus(adminHeaders, partnerUserId, "active", auth, pool);
+    await setManagedUserStatus(await resolveSessionPrincipal(adminHeaders, auth, pool), partnerUserId, "active", pool);
     expect(await partnerVisibility()).toEqual(visible);
   });
 
   it("hides a partner who deactivated their own account", async () => {
     const partnerHeaders = await signIn("partner@inactive.test", "Partner-secure-1!");
-    await deactivateOwnAccount(partnerHeaders, "Partner-secure-1!", auth, pool);
+    await deactivateOwnAccount(await resolveSessionPrincipal(partnerHeaders, auth, pool), "Partner-secure-1!", pool);
     expect(await partnerVisibility()).toEqual(hidden);
 
     const preferences = await query<{ visible: boolean }>(
@@ -152,7 +152,7 @@ describe("inactive accounts are invisible to other users", () => {
     );
     expect(preferences.rows[0]?.visible).toBe(true);
 
-    await setManagedUserStatus(adminHeaders, partnerUserId, "active", auth, pool);
+    await setManagedUserStatus(await resolveSessionPrincipal(adminHeaders, auth, pool), partnerUserId, "active", pool);
     expect(await partnerVisibility()).toEqual(visible);
   });
 });

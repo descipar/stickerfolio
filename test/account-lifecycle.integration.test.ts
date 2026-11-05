@@ -1,5 +1,7 @@
 import { afterAll, beforeAll, describe, expect, inject, it, vi } from "vitest";
 
+import { createAuth, resolveSessionPrincipal } from "@/auth";
+import { exportOwnAccountData } from "@/modules/accounts";
 import { createPool, query } from "@/infrastructure/database";
 import {
   AdminError,
@@ -20,11 +22,9 @@ import {
   bootstrapAdminPassword,
   bootstrapInitialAdmin,
   changeOwnPassword,
-  createAuth,
   createInvitation,
   deactivateOwnAccount,
   deleteOwnAccount,
-  exportOwnAccountData,
 } from "@/modules/identity";
 import { createOwnComparisonGrant } from "@/modules/trading";
 
@@ -140,28 +140,28 @@ describe("account lifecycle: suspension, deactivation, and deletion", () => {
 
     await bootstrapInitialAdmin(pool);
     const initial = await signIn(bootstrapAdminEmail, bootstrapAdminPassword);
-    await changeOwnPassword(initial.headers, bootstrapAdminPassword, adminPassword, auth, pool);
+    await changeOwnPassword(await resolveSessionPrincipal(initial.headers, auth, pool), bootstrapAdminPassword, adminPassword, pool);
     adminHeaders = (await signIn(bootstrapAdminEmail, adminPassword)).headers;
     adminId = (await query<{ id: string }>(`SELECT id FROM "user" WHERE email = $1`, [bootstrapAdminEmail], pool)).rows[0]!.id;
 
-    aliceId = (await createManagedUser(adminHeaders, {
+    aliceId = (await createManagedUser(await resolveSessionPrincipal(adminHeaders, auth, pool), {
       email: "alice@example.test",
       displayName: "Alice",
       initialPassword: alicePassword,
       role: "user",
-    }, auth, pool)).id;
-    bobId = (await createManagedUser(adminHeaders, {
+    }, pool)).id;
+    bobId = (await createManagedUser(await resolveSessionPrincipal(adminHeaders, auth, pool), {
       email: "bob@example.test",
       displayName: "Bob",
       initialPassword: bobPassword,
       role: "user",
-    }, auth, pool)).id;
-    adminBId = (await createManagedUser(adminHeaders, {
+    }, pool)).id;
+    adminBId = (await createManagedUser(await resolveSessionPrincipal(adminHeaders, auth, pool), {
       email: "admin-b@example.test",
       displayName: "Second admin",
       initialPassword: adminBPassword,
       role: "admin",
-    }, auth, pool)).id;
+    }, pool)).id;
 
     await query(
       `UPDATE "user" SET "mustChangePassword" = false WHERE id = ANY($1::uuid[])`,
@@ -171,12 +171,12 @@ describe("account lifecycle: suspension, deactivation, and deletion", () => {
     aliceHeaders = (await signIn("alice@example.test", alicePassword)).headers;
     const bobHeaders = (await signIn("bob@example.test", bobPassword)).headers;
 
-    const aliceCollection = await addOwnCollection(aliceHeaders, albumId, auth, pool);
+    const aliceCollection = await addOwnCollection(await resolveSessionPrincipal(aliceHeaders, auth, pool), albumId, pool);
     aliceCollectionId = aliceCollection.id;
-    await setOwnHoldingQuantity(aliceHeaders, aliceCollection.id, stickerOne, 2, auth, pool);
-    await setOwnHoldingQuantity(aliceHeaders, aliceCollection.id, stickerTwo, 1, auth, pool);
-    const bobCollection = await addOwnCollection(bobHeaders, albumId, auth, pool);
-    await setOwnHoldingQuantity(bobHeaders, bobCollection.id, stickerOne, 3, auth, pool);
+    await setOwnHoldingQuantity(await resolveSessionPrincipal(aliceHeaders, auth, pool), aliceCollection.id, stickerOne, 2, pool);
+    await setOwnHoldingQuantity(await resolveSessionPrincipal(aliceHeaders, auth, pool), aliceCollection.id, stickerTwo, 1, pool);
+    const bobCollection = await addOwnCollection(await resolveSessionPrincipal(bobHeaders, auth, pool), albumId, pool);
+    await setOwnHoldingQuantity(await resolveSessionPrincipal(bobHeaders, auth, pool), bobCollection.id, stickerOne, 3, pool);
   });
 
   afterAll(async () => {
@@ -185,24 +185,24 @@ describe("account lifecycle: suspension, deactivation, and deletion", () => {
   });
 
   it("blocks sign-in for an administrator-suspended account and restores it on reactivation", async () => {
-    await setManagedUserStatus(adminHeaders, aliceId, "suspended", auth, pool);
+    await setManagedUserStatus(await resolveSessionPrincipal(adminHeaders, auth, pool), aliceId, "suspended", pool);
     await expect(auth.api.getSession({ headers: aliceHeaders })).resolves.toBeNull();
     expect((await signIn("alice@example.test", alicePassword)).status).not.toBe(200);
 
-    await setManagedUserStatus(adminHeaders, aliceId, "active", auth, pool);
+    await setManagedUserStatus(await resolveSessionPrincipal(adminHeaders, auth, pool), aliceId, "active", pool);
     const reactivated = await signIn("alice@example.test", alicePassword);
     expect(reactivated.status).toBe(200);
     aliceHeaders = reactivated.headers;
   });
 
   it("lets a user deactivate their own account and blocks sign-in until reactivation", async () => {
-    await expect(deactivateOwnAccount(aliceHeaders, "wrong-password", auth, pool)).rejects.toBeInstanceOf(AccountLifecycleError);
+    await expect(deactivateOwnAccount(await resolveSessionPrincipal(aliceHeaders, auth, pool), "wrong-password", pool)).rejects.toBeInstanceOf(AccountLifecycleError);
 
-    await deactivateOwnAccount(aliceHeaders, alicePassword, auth, pool);
+    await deactivateOwnAccount(await resolveSessionPrincipal(aliceHeaders, auth, pool), alicePassword, pool);
     await expect(auth.api.getSession({ headers: aliceHeaders })).resolves.toBeNull();
     expect((await signIn("alice@example.test", alicePassword)).status).not.toBe(200);
 
-    await setManagedUserStatus(adminHeaders, aliceId, "active", auth, pool);
+    await setManagedUserStatus(await resolveSessionPrincipal(adminHeaders, auth, pool), aliceId, "active", pool);
     const reactivated = await signIn("alice@example.test", alicePassword);
     expect(reactivated.status).toBe(200);
     aliceHeaders = reactivated.headers;
@@ -210,23 +210,23 @@ describe("account lifecycle: suspension, deactivation, and deletion", () => {
 
   it("treats the sole active administrator as the last one even when a suspended administrator exists", async () => {
     // Suspend the second administrator so only the bootstrap admin can sign in.
-    await setManagedUserStatus(adminHeaders, adminBId, "suspended", auth, pool);
+    await setManagedUserStatus(await resolveSessionPrincipal(adminHeaders, auth, pool), adminBId, "suspended", pool);
 
     // The bootstrap admin is now the only ACTIVE administrator; it must not be
     // able to delete or deactivate itself even though a suspended admin exists,
     // otherwise nobody could sign in to reactivate that suspended admin.
-    await expect(deleteOwnAccount(adminHeaders, adminPassword, bootstrapAdminEmail, auth, pool))
+    await expect(deleteOwnAccount(await resolveSessionPrincipal(adminHeaders, auth, pool), adminPassword, bootstrapAdminEmail, pool))
       .rejects.toMatchObject({ status: 409 });
-    await expect(deactivateOwnAccount(adminHeaders, adminPassword, auth, pool))
+    await expect(deactivateOwnAccount(await resolveSessionPrincipal(adminHeaders, auth, pool), adminPassword, pool))
       .rejects.toMatchObject({ status: 409 });
     // The admin-panel delete of the sole active admin is refused for the same
     // reason (here it also hits the self-delete guard, which is fine).
-    await expect(deleteManagedUser(adminHeaders, adminId, bootstrapAdminEmail, auth, pool))
+    await expect(deleteManagedUser(await resolveSessionPrincipal(adminHeaders, auth, pool), adminId, bootstrapAdminEmail, pool))
       .rejects.toBeInstanceOf(AdminError);
     expect((await graphCounts(adminId)).users).toBe(1);
 
     // Restore the second administrator to active for the remaining tests.
-    await setManagedUserStatus(adminHeaders, adminBId, "active", auth, pool);
+    await setManagedUserStatus(await resolveSessionPrincipal(adminHeaders, auth, pool), adminBId, "active", pool);
   });
 
   it("deletes only the target user's graph, keeping every other user intact", async () => {
@@ -235,12 +235,12 @@ describe("account lifecycle: suspension, deactivation, and deletion", () => {
     const aliceBefore = await graphCounts(aliceId);
 
     await expect(
-      deleteManagedUser(adminHeaders, bobId, "typo@example.test", auth, pool),
+      deleteManagedUser(await resolveSessionPrincipal(adminHeaders, auth, pool), bobId, "typo@example.test", pool),
     ).rejects.toBeInstanceOf(AdminError);
     expect((await graphCounts(bobId)).users).toBe(1);
 
     // Resolving proves the cascade completed with no foreign-key violation.
-    await expect(deleteManagedUser(adminHeaders, bobId, "bob@example.test", auth, pool)).resolves.toBeUndefined();
+    await expect(deleteManagedUser(await resolveSessionPrincipal(adminHeaders, auth, pool), bobId, "bob@example.test", pool)).resolves.toBeUndefined();
     expect(await graphCounts(bobId)).toEqual({
       users: 0,
       accounts: 0,
@@ -265,33 +265,29 @@ describe("account lifecycle: suspension, deactivation, and deletion", () => {
 
   it("exports only the signed-in user's complete portable account data", async () => {
     const ownShare = await createOwnCollectionShare(
-      aliceHeaders,
+      await resolveSessionPrincipal(aliceHeaders, auth, pool),
       aliceCollectionId,
       "both",
       new Date("2030-01-01T00:00:00.000Z"),
-      auth,
-      pool,
-    );
+      pool);
     const ownComparisonGrant = await createOwnComparisonGrant(
-      aliceHeaders,
+      await resolveSessionPrincipal(aliceHeaders, auth, pool),
       aliceCollectionId,
-      auth,
-      pool,
-    );
-    const otherUser = await createManagedUser(adminHeaders, {
+      pool);
+    const otherUser = await createManagedUser(await resolveSessionPrincipal(adminHeaders, auth, pool), {
       email: "export-neighbor@example.test",
       displayName: "Export Neighbor",
       initialPassword: "Neighbor-pass-1!",
       role: "user",
-    }, auth, pool);
+    }, pool);
     await query(
       `UPDATE "user" SET "mustChangePassword" = false WHERE id = $1`,
       [otherUser.id],
       pool,
     );
     const otherHeaders = (await signIn("export-neighbor@example.test", "Neighbor-pass-1!")).headers;
-    const otherCollection = await addOwnCollection(otherHeaders, albumId, auth, pool);
-    await setOwnHoldingQuantity(otherHeaders, otherCollection.id, stickerThree, 4, auth, pool);
+    const otherCollection = await addOwnCollection(await resolveSessionPrincipal(otherHeaders, auth, pool), albumId, pool);
+    await setOwnHoldingQuantity(await resolveSessionPrincipal(otherHeaders, auth, pool), otherCollection.id, stickerThree, 4, pool);
 
     await query(
       `UPDATE trading_preferences SET visible = true, updated_at = now()
@@ -300,7 +296,7 @@ describe("account lifecycle: suspension, deactivation, and deletion", () => {
       pool,
     );
     const exportedAt = new Date("2026-07-28T12:00:00.000Z");
-    const data = await exportOwnAccountData(aliceHeaders, auth, pool, exportedAt);
+    const data = await exportOwnAccountData(await resolveSessionPrincipal(aliceHeaders, auth, pool), pool, exportedAt);
 
     expect(data).toMatchObject({
       format: "stickerfolio-account-export",
@@ -375,41 +371,41 @@ describe("account lifecycle: suspension, deactivation, and deletion", () => {
       "sessionToken",
       "token",
     ]));
-    await expect(exportOwnAccountData(new Headers(), auth, pool)).rejects.toMatchObject({
+    await expect(exportOwnAccountData(null, pool)).rejects.toMatchObject({
       status: 401,
     });
   });
 
   it("exports a valid empty account document when no collector profile exists", async () => {
-    const data = await exportOwnAccountData(adminHeaders, auth, pool);
+    const data = await exportOwnAccountData(await resolveSessionPrincipal(adminHeaders, auth, pool), pool);
     expect(data.account.id).toBe(adminId);
     expect(data.collector).toBeNull();
   });
 
   it("refuses to remove the last remaining administrator", async () => {
     // Two administrators exist, so deleting the second one is allowed.
-    await expect(deleteManagedUser(adminHeaders, adminBId, "admin-b@example.test", auth, pool)).resolves.toBeUndefined();
+    await expect(deleteManagedUser(await resolveSessionPrincipal(adminHeaders, auth, pool), adminBId, "admin-b@example.test", pool)).resolves.toBeUndefined();
 
     // The bootstrap administrator is now the only one and is protected.
-    await expect(deleteOwnAccount(adminHeaders, adminPassword, bootstrapAdminEmail, auth, pool))
+    await expect(deleteOwnAccount(await resolveSessionPrincipal(adminHeaders, auth, pool), adminPassword, bootstrapAdminEmail, pool))
       .rejects.toMatchObject({ status: 409 });
-    await expect(deactivateOwnAccount(adminHeaders, adminPassword, auth, pool))
+    await expect(deactivateOwnAccount(await resolveSessionPrincipal(adminHeaders, auth, pool), adminPassword, pool))
       .rejects.toMatchObject({ status: 409 });
     // An administrator cannot delete their own account through the management panel.
-    await expect(deleteManagedUser(adminHeaders, adminId, bootstrapAdminEmail, auth, pool))
+    await expect(deleteManagedUser(await resolveSessionPrincipal(adminHeaders, auth, pool), adminId, bootstrapAdminEmail, pool))
       .rejects.toBeInstanceOf(AdminError);
     expect((await graphCounts(adminId)).users).toBe(1);
   });
 
   it("deletes an account through self-service with password and email confirmation, minimizing the audit trail", async () => {
-    await expect(deleteOwnAccount(aliceHeaders, "wrong-password", "alice@example.test", auth, pool))
+    await expect(deleteOwnAccount(await resolveSessionPrincipal(aliceHeaders, auth, pool), "wrong-password", "alice@example.test", pool))
       .rejects.toBeInstanceOf(AccountLifecycleError);
-    await expect(deleteOwnAccount(aliceHeaders, alicePassword, "not-alice@example.test", auth, pool))
+    await expect(deleteOwnAccount(await resolveSessionPrincipal(aliceHeaders, auth, pool), alicePassword, "not-alice@example.test", pool))
       .rejects.toBeInstanceOf(AccountLifecycleError);
     expect((await graphCounts(aliceId)).users).toBe(1);
 
     const output = vi.spyOn(console, "log").mockImplementation(() => undefined);
-    await expect(deleteOwnAccount(aliceHeaders, alicePassword, "alice@example.test", auth, pool)).resolves.toBeUndefined();
+    await expect(deleteOwnAccount(await resolveSessionPrincipal(aliceHeaders, auth, pool), alicePassword, "alice@example.test", pool)).resolves.toBeUndefined();
     expect(await graphCounts(aliceId)).toEqual({
       users: 0,
       accounts: 0,
@@ -481,7 +477,7 @@ describe("account lifecycle: deleting an invitation creator preserves the invita
     await query(`TRUNCATE "user", albums, collector_profiles CASCADE`, [], lifecyclePool);
     await bootstrapInitialAdmin(lifecyclePool);
     const initial = await signInWith(lifecycleAuth, bootstrapAdminEmail, bootstrapAdminPassword);
-    await changeOwnPassword(initial.headers, bootstrapAdminPassword, primaryAdminPassword, lifecycleAuth, lifecyclePool);
+    await changeOwnPassword(await resolveSessionPrincipal(initial.headers, lifecycleAuth, lifecyclePool), bootstrapAdminPassword, primaryAdminPassword, lifecyclePool);
     primaryAdminHeaders = (await signInWith(lifecycleAuth, bootstrapAdminEmail, primaryAdminPassword)).headers;
   });
 
@@ -493,16 +489,14 @@ describe("account lifecycle: deleting an invitation creator preserves the invita
     // A second administrator is the invitation creator; the bootstrap admin
     // stays behind so removing the creator is never a last-admin deletion.
     const creator = await createManagedUser(
-      primaryAdminHeaders,
+      await resolveSessionPrincipal(primaryAdminHeaders, lifecycleAuth, lifecyclePool),
       {
         email: "invite-admin@example.test",
         displayName: "Invite Admin",
         initialPassword: "Invite-admin-1!",
         role: "admin",
       },
-      lifecycleAuth,
-      lifecyclePool,
-    );
+      lifecyclePool);
 
     const pending = await createInvitation(
       { email: "pending-target@example.test", displayName: "Pending Target", createdByUserId: creator.id },
@@ -526,7 +520,7 @@ describe("account lifecycle: deleting an invitation creator preserves the invita
     // Deleting the creator through the admin panel must succeed and must not
     // delete the invitations (created_by is cleared via ON DELETE SET NULL).
     await expect(
-      deleteManagedUser(primaryAdminHeaders, creator.id, "invite-admin@example.test", lifecycleAuth, lifecyclePool),
+      deleteManagedUser(await resolveSessionPrincipal(primaryAdminHeaders, lifecycleAuth, lifecyclePool), creator.id, "invite-admin@example.test", lifecyclePool),
     ).resolves.toBeUndefined();
 
     // The creator user is gone.
@@ -562,16 +556,14 @@ describe("account lifecycle: deleting an invitation creator preserves the invita
     // their own account through self-service.
     const selfUserPassword = "Selfuser-pass-1!";
     const selfUser = await createManagedUser(
-      primaryAdminHeaders,
+      await resolveSessionPrincipal(primaryAdminHeaders, lifecycleAuth, lifecyclePool),
       {
         email: "self-creator@example.test",
         displayName: "Self Creator",
         initialPassword: selfUserPassword,
         role: "user",
       },
-      lifecycleAuth,
-      lifecyclePool,
-    );
+      lifecyclePool);
     // Clear the first-login password change so the user can sign in directly.
     await query(`UPDATE "user" SET "mustChangePassword" = false WHERE id = $1`, [selfUser.id], lifecyclePool);
     const selfHeaders = (await signInWith(lifecycleAuth, "self-creator@example.test", selfUserPassword)).headers;
@@ -593,7 +585,7 @@ describe("account lifecycle: deleting an invitation creator preserves the invita
 
     // Self-service deletion succeeds for a non-administrator.
     await expect(
-      deleteOwnAccount(selfHeaders, selfUserPassword, "self-creator@example.test", lifecycleAuth, lifecyclePool),
+      deleteOwnAccount(await resolveSessionPrincipal(selfHeaders, lifecycleAuth, lifecyclePool), selfUserPassword, "self-creator@example.test", lifecyclePool),
     ).resolves.toBeUndefined();
 
     const selfGone = await query<{ count: number }>(

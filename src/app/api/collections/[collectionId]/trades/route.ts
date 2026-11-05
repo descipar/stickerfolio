@@ -2,8 +2,9 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 
 import { getOwnTradeMatches, type TradeMatchOptions, type TradeMatchResult } from "@/modules/trading";
+import type { Principal } from "@/shared/principal";
 
-import { apiError } from "../../../http";
+import { apiError, principalOf } from "../../../http";
 
 const idSchema = z.uuid();
 const querySchema = z.object({
@@ -25,10 +26,11 @@ export async function handleTradeMatchesRequest(
   request: Request,
   collectionIdValue: string,
   loadMatches: (
-    headers: Headers,
+    principal: Principal | null,
     collectionId: string,
     options: TradeMatchOptions,
   ) => Promise<TradeMatchResult> = getOwnTradeMatches,
+  resolvePrincipal: (request: Request) => Promise<Principal | null> = principalOf,
 ): Promise<NextResponse> {
   const collectionId = idSchema.safeParse(collectionIdValue);
   const url = new URL(request.url);
@@ -42,7 +44,7 @@ export async function handleTradeMatchesRequest(
   if (!collectionId.success) return NextResponse.json({ error: "Collection not found." }, { status: 404 });
   if (!parsedQuery.success) return NextResponse.json({ error: "Invalid trade filters." }, { status: 400 });
   try {
-    return NextResponse.json(await loadMatches(request.headers, collectionId.data, {
+    return NextResponse.json(await loadMatches(await resolvePrincipal(request), collectionId.data, {
       direction: parsedQuery.data.direction,
       ...(parsedQuery.data.section ? { sectionId: parsedQuery.data.section } : {}),
       sort: parsedQuery.data.sort,

@@ -5,19 +5,83 @@ Stickerfolio is a modular monolith. It is deployed as one application, while dom
 ## Module dependency graph
 
 ```text
-identity       -> none
-collectors     -> identity
+identity       -> collectors
+collectors     -> none
 catalog        -> none
 collections    -> collectors, catalog
 trading        -> collectors, catalog, collections
 admin          -> identity, collectors, catalog
+accounts       -> identity, collectors, collections, trading
 ```
+
+The graph lives in `src/modules/module-graph.json`. ESLint reads it to
+enforce imports, and `test/module-data-ownership.test.ts` reads it to enforce
+table ownership.
 
 Each module exposes its public API through `src/modules/<module>/index.ts`. A module may import only the public index of an allowed dependency. Imports into another module's internal files are always forbidden.
 
 The `app` and `components` layers may call module public APIs, but they may not access PostgreSQL directly. Database queries and domain decisions belong behind module use cases rather than in pages, route handlers, or visual components.
 
-These rules are enforced by ESLint and by executable boundary tests. Update the dependency graph and its enforcement together when a genuine product dependency is introduced.
+- `identity` owns accounts, credentials, sessions, and invitations. When it
+  creates an account it asks `collectors` for the profile in the same
+  transaction.
+- `collectors` owns collector profiles and has no dependencies.
+- `accounts` composes account-level use cases across modules, currently the
+  portable account export.
+
+## Principals instead of HTTP headers
+
+Use cases take a `Principal` (`src/shared/principal.ts`): user id, role,
+password-change state, collector id, session id, and scopes. They never read
+headers, cookies, or tokens. The delivery layer resolves the principal:
+
+- `src/auth/better-auth.ts` configures Better Auth (sign-in, sign-out,
+  session lookup).
+- `src/auth/principal.ts` is the cookie-session adapter. It turns a session
+  into a principal (only for active accounts) and gives pages a `Viewer` with
+  the collector profile.
+- Route handlers call `principalOf(request)`; pages call `resolveViewer`.
+
+A future adapter, for example OAuth bearer tokens for MCP (#75) or a
+background job acting for a user, builds the same principal and calls the
+same use cases. Cookie sessions carry the scope `*`; narrower adapters list
+scopes such as `collections:read`, which `requirePrincipal` and
+`requireCollectorPrincipal` check. ESLint forbids modules to import
+`better-auth`, `@/auth`, `next/headers`, or `next/server`, and a test fails
+if a module mentions `Headers`.
+
+## Data ownership
+
+Every table belongs to exactly one module (`tables` in `module-graph.json`):
+
+| Module | Tables |
+| --- | --- |
+| identity | `user`, `session`, `account`, `verification`, `invitations` |
+| collectors | `collector_profiles`, view `active_collector_profiles` |
+| catalog | `albums`, `album_revisions`, `album_sections`, `album_revision_stickers`, `stickers`, `album_metadata_corrections` |
+| collections | `collections`, `holdings`, `collection_share_links` |
+| trading | `trading_preferences`, `collection_comparison_grants` |
+
+Rules, enforced by `test/module-data-ownership.test.ts`:
+
+1. Only the owner writes a table (`INSERT`, `UPDATE`, `DELETE`, row locks).
+   Other modules call the owner's API, for example `admin` uses identity's
+   `setAccountStatus` and collectors' `createCollectorProfileForUser`.
+2. A module may read a foreign table in its own SQL only if it depends on the
+   owner and lists the table under `reads`. These joins are deliberate:
+   trade matching and comparisons run as single PostgreSQL statements over
+   catalog, collections, and collector data (#117), which an API round trip
+   per table would undo.
+3. Every table created by a migration must have an owner.
+
+Per-collector data is exported module by module: identity
+(`exportAccountRecord`), collectors (`exportCollectorProfile`), collections
+(`exportCollectionsForCollector`), and trading
+(`exportTradingDataForCollector`). `accounts` composes them in one
+repeatable-read transaction. A new module that stores per-collector data adds
+its own contribution there. Deletion relies on `ON DELETE CASCADE` from the
+account row, so new per-collector tables must reference the collector profile
+or account with a cascading foreign key.
 
 ## Infrastructure
 

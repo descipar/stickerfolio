@@ -1,0 +1,91 @@
+{
+  "$comment": "Module dependency graph and table ownership (#125). Writes only by the owner; reads of foreign tables only when listed under reads and the owner is a dependency. See docs/ARCHITECTURE.md.",
+  "dependencies": {
+    "identity": [
+      "collectors"
+    ],
+    "collectors": [],
+    "catalog": [],
+    "collections": [
+      "collectors",
+      "catalog"
+    ],
+    "trading": [
+      "collectors",
+      "catalog",
+      "collections"
+    ],
+    "admin": [
+      "identity",
+      "collectors",
+      "catalog"
+    ],
+    "accounts": [
+      "identity",
+      "collectors",
+      "collections",
+      "trading"
+    ]
+  },
+  "tables": {
+    "identity": [
+      "user",
+      "session",
+      "account",
+      "verification",
+      "invitations"
+    ],
+    "collectors": [
+      "collector_profiles",
+      "active_collector_profiles"
+    ],
+    "catalog": [
+      "albums",
+      "album_revisions",
+      "album_sections",
+      "album_revision_stickers",
+      "stickers",
+      "album_metadata_corrections"
+    ],
+    "collections": [
+      "collections",
+      "holdings",
+      "collection_share_links"
+    ],
+    "trading": [
+      "trading_preferences",
+      "collection_comparison_grants"
+    ],
+    "admin": [],
+    "accounts": []
+  },
+  "reads": {
+    "identity": [],
+    "collectors": [],
+    "catalog": [],
+    "collections": [
+      "albums",
+      "album_revisions",
+      "album_sections",
+      "album_revision_stickers",
+      "stickers",
+      "collector_profiles",
+      "active_collector_profiles"
+    ],
+    "trading": [
+      "albums",
+      "album_revisions",
+      "album_sections",
+      "album_revision_stickers",
+      "collections",
+      "holdings",
+      "collector_profiles",
+      "active_collector_profiles"
+    ],
+    "admin": [
+      "user",
+      "collector_profiles"
+    ],
+    "accounts": []
+  }
+}

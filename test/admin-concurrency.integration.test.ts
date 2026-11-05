@@ -1,5 +1,6 @@
 import { afterAll, beforeAll, describe, expect, inject, it } from "vitest";
 
+import { createAuth, resolveSessionPrincipal } from "@/auth";
 import { createPool, query } from "@/infrastructure/database";
 import {
   AdminError,
@@ -13,7 +14,6 @@ import {
   bootstrapAdminPassword,
   bootstrapInitialAdmin,
   changeOwnPassword,
-  createAuth,
 } from "@/modules/identity";
 
 import { createTestEnvironment } from "./create-test-environment";
@@ -73,16 +73,14 @@ async function setupTwoActiveAdmins(): Promise<TwoAdmins> {
   await bootstrapInitialAdmin(pool);
 
   const initial = await signIn(bootstrapAdminEmail, bootstrapAdminPassword);
-  await changeOwnPassword(initial, bootstrapAdminPassword, adminAPassword, auth, pool);
+  await changeOwnPassword(await resolveSessionPrincipal(initial, auth, pool), bootstrapAdminPassword, adminAPassword, pool);
   const aHeaders = await signIn(bootstrapAdminEmail, adminAPassword);
   const aId = (await query<{ id: string }>(`SELECT id FROM "user" WHERE email = $1`, [bootstrapAdminEmail], pool)).rows[0]!.id;
 
   const b = await createManagedUser(
-    aHeaders,
+    await resolveSessionPrincipal(aHeaders, auth, pool),
     { email: adminBEmail, displayName: "Second Admin", initialPassword: adminBPassword, role: "admin" },
-    auth,
-    pool,
-  );
+    pool);
   await query(`UPDATE "user" SET "mustChangePassword" = false WHERE id = $1`, [b.id], pool);
   const bHeaders = await signIn(adminBEmail, adminBPassword);
 
@@ -171,8 +169,8 @@ describe("admin concurrency: last-active-administrator races", () => {
     const { aId, bId, aHeaders, bHeaders } = await setupTwoActiveAdmins();
 
     const results = await runContending(
-      () => deleteManagedUser(aHeaders, bId, adminBEmail, auth, pool),
-      () => setManagedUserStatus(bHeaders, aId, "suspended", auth, pool),
+      async () => deleteManagedUser(await resolveSessionPrincipal(aHeaders, auth, pool), bId, adminBEmail, pool),
+      async () => setManagedUserStatus(await resolveSessionPrincipal(bHeaders, auth, pool), aId, "suspended", pool),
     );
 
     const fulfilled = results.filter((result) => result.status === "fulfilled");
@@ -192,8 +190,8 @@ describe("admin concurrency: last-active-administrator races", () => {
     const { aId, bId, aHeaders, bHeaders } = await setupTwoActiveAdmins();
 
     const results = await runContending(
-      () => deleteManagedUser(aHeaders, bId, adminBEmail, auth, pool),
-      () => setManagedUserRole(bHeaders, aId, "user", auth, pool),
+      async () => deleteManagedUser(await resolveSessionPrincipal(aHeaders, auth, pool), bId, adminBEmail, pool),
+      async () => setManagedUserRole(await resolveSessionPrincipal(bHeaders, auth, pool), aId, "user", pool),
     );
 
     const fulfilled = results.filter((result) => result.status === "fulfilled");

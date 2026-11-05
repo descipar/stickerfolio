@@ -4,7 +4,7 @@ import type { Pool, PoolClient } from "pg";
 
 import { DatabaseError, getPool, query, withTransaction } from "@/infrastructure/database";
 import { writeAuditEvent } from "@/infrastructure/observability";
-import { requireCollectorContext } from "@/modules/collectors";
+import { type Principal, requireCollectorPrincipal } from "@/shared/principal";
 
 import { CollectionError } from "./repository";
 
@@ -54,7 +54,6 @@ interface ShareRow {
   updated_at: Date;
 }
 
-type CollectorAuth = Parameters<typeof requireCollectorContext>[1];
 
 function shareStatus(row: Pick<ShareRow, "expires_at" | "revoked_at">, now: Date): CollectionShareStatus {
   if (row.revoked_at) return "revoked";
@@ -341,16 +340,15 @@ export async function loadSharedCollection(
 }
 
 export async function createOwnCollectionShare(
-  headers: Headers,
+  principal: Principal | null,
   collectionId: string,
   scope: CollectionShareScope,
   expiresAt: Date | null,
-  auth?: CollectorAuth,
   pool: Pool = getPool(),
 ): Promise<{ share: CollectionShareSummary; token: string }> {
-  const identity = await requireCollectorContext(headers, auth, pool);
+  const identity = requireCollectorPrincipal(principal);
   const created = await createCollectionShare(
-    identity.collector.id,
+    identity.collectorId,
     collectionId,
     scope,
     expiresAt,
@@ -366,26 +364,24 @@ export async function createOwnCollectionShare(
 }
 
 export async function getOwnCollectionShares(
-  headers: Headers,
+  principal: Principal | null,
   collectionId: string,
-  auth?: CollectorAuth,
   pool: Pool = getPool(),
 ): Promise<CollectionShareSummary[]> {
-  const identity = await requireCollectorContext(headers, auth, pool);
-  return listCollectionShares(identity.collector.id, collectionId, pool);
+  const identity = requireCollectorPrincipal(principal);
+  return listCollectionShares(identity.collectorId, collectionId, pool);
 }
 
 export async function updateOwnCollectionShare(
-  headers: Headers,
+  principal: Principal | null,
   collectionId: string,
   shareId: string,
   input: { scope?: CollectionShareScope; expiresAt?: Date | null },
-  auth?: CollectorAuth,
   pool: Pool = getPool(),
 ): Promise<CollectionShareSummary> {
-  const identity = await requireCollectorContext(headers, auth, pool);
+  const identity = requireCollectorPrincipal(principal);
   const updated = await updateCollectionShare(
-    identity.collector.id,
+    identity.collectorId,
     collectionId,
     shareId,
     input,
@@ -404,15 +400,14 @@ export async function updateOwnCollectionShare(
 }
 
 export async function revokeOwnCollectionShare(
-  headers: Headers,
+  principal: Principal | null,
   collectionId: string,
   shareId: string,
-  auth?: CollectorAuth,
   pool: Pool = getPool(),
 ): Promise<boolean> {
-  const identity = await requireCollectorContext(headers, auth, pool);
+  const identity = requireCollectorPrincipal(principal);
   const revoked = await revokeCollectionShare(
-    identity.collector.id,
+    identity.collectorId,
     collectionId,
     shareId,
     pool,

@@ -1,6 +1,17 @@
 import { describe, expect, it, vi } from "vitest";
 
+import { createPrincipal } from "@/shared/principal";
+
 import { handleTradeMatchesRequest } from "./route";
+
+const principal = createPrincipal({
+  userId: "8d7f1c1e-4a55-4d8e-9b8a-2f4f0a1f0c11",
+  role: "user",
+  mustChangePassword: false,
+  collectorId: "5e0e9d2a-1c3b-4b6f-8f2e-9a7c6b5d4e3f",
+  sessionId: "session",
+});
+const resolvePrincipal = async () => principal;
 
 const collectionId = "18b8e61c-001e-47a3-8cfc-deaa52117295";
 const emptyResult = {
@@ -20,11 +31,13 @@ describe("trade matching API filters", () => {
       new Request("http://localhost/api/collections/not-an-id/trades"),
       "not-an-id",
       load,
+      resolvePrincipal,
     );
     const invalidFilters = await handleTradeMatchesRequest(
       new Request(`http://localhost/api/collections/${collectionId}/trades?limit=500`),
       collectionId,
       load,
+      resolvePrincipal,
     );
 
     expect(invalidId.status).toBe(404);
@@ -39,10 +52,11 @@ describe("trade matching API filters", () => {
       new Request(`http://localhost/api/collections/${collectionId}/trades?direction=two-way&section=${sectionId}&sort=wanted&limit=10&offset=20`),
       collectionId,
       load,
+      resolvePrincipal,
     );
 
     expect(response.status).toBe(200);
-    expect(load).toHaveBeenCalledWith(expect.any(Headers), collectionId, {
+    expect(load).toHaveBeenCalledWith(principal, collectionId, {
       direction: "two-way",
       sectionId,
       sort: "wanted",

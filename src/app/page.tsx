@@ -1,10 +1,10 @@
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 
-import { resolveIdentity } from "@/modules/identity";
+import { resolveViewer } from "@/auth";
 
 export default async function HomePage() {
-  const identity = await resolveIdentity(await headers());
+  const identity = await resolveViewer(await headers());
   if (!identity) redirect("/login");
   if (identity.mustChangePassword) redirect("/password/change");
   // A collector who has not completed onboarding is always routed to it, so a

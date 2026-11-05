@@ -1,5 +1,6 @@
 import { afterAll, beforeAll, describe, expect, inject, it } from "vitest";
 
+import { createAuth, resolveSessionPrincipal } from "@/auth";
 import { handleTradeMatchesRequest } from "@/app/api/collections/[collectionId]/trades/route";
 import { createPool, query } from "@/infrastructure/database";
 import { createManagedUser } from "@/modules/admin";
@@ -10,7 +11,6 @@ import {
   bootstrapAdminPassword,
   bootstrapInitialAdmin,
   changeOwnPassword,
-  createAuth,
 } from "@/modules/identity";
 import {
   calculateTradeMatches,
@@ -80,15 +80,15 @@ describe("privacy-preserving trade matching", () => {
     }, pool);
     await bootstrapInitialAdmin(pool);
     const initialAdmin = await signIn(bootstrapAdminEmail, bootstrapAdminPassword);
-    await changeOwnPassword(initialAdmin, bootstrapAdminPassword, "Admin-secure-1!", auth, pool);
+    await changeOwnPassword(await resolveSessionPrincipal(initialAdmin, auth, pool), bootstrapAdminPassword, "Admin-secure-1!", pool);
     adminHeaders = await signIn(bootstrapAdminEmail, "Admin-secure-1!");
 
     const users = await Promise.all([
-      createManagedUser(adminHeaders, { email: "owner@trade.test", displayName: "Owner", initialPassword: "Owner-secure-1!", role: "user" }, auth, pool),
-      createManagedUser(adminHeaders, { email: "two-way@trade.test", displayName: "Alex Two-way", initialPassword: "Two-way-secure-1!", role: "user" }, auth, pool),
-      createManagedUser(adminHeaders, { email: "cross@trade.test", displayName: "Blair Cross", initialPassword: "Cross-secure-1!", role: "user" }, auth, pool),
-      createManagedUser(adminHeaders, { email: "hidden@trade.test", displayName: "Hidden collector", initialPassword: "Hidden-secure-1!", role: "user" }, auth, pool),
-      createManagedUser(adminHeaders, { email: "other@trade.test", displayName: "Other album", initialPassword: "Other-secure-1!", role: "user" }, auth, pool),
+      createManagedUser(await resolveSessionPrincipal(adminHeaders, auth, pool), { email: "owner@trade.test", displayName: "Owner", initialPassword: "Owner-secure-1!", role: "user" }, pool),
+      createManagedUser(await resolveSessionPrincipal(adminHeaders, auth, pool), { email: "two-way@trade.test", displayName: "Alex Two-way", initialPassword: "Two-way-secure-1!", role: "user" }, pool),
+      createManagedUser(await resolveSessionPrincipal(adminHeaders, auth, pool), { email: "cross@trade.test", displayName: "Blair Cross", initialPassword: "Cross-secure-1!", role: "user" }, pool),
+      createManagedUser(await resolveSessionPrincipal(adminHeaders, auth, pool), { email: "hidden@trade.test", displayName: "Hidden collector", initialPassword: "Hidden-secure-1!", role: "user" }, pool),
+      createManagedUser(await resolveSessionPrincipal(adminHeaders, auth, pool), { email: "other@trade.test", displayName: "Other album", initialPassword: "Other-secure-1!", role: "user" }, pool),
     ]);
     ownerId = users[0]!.id;
     await query(`UPDATE "user" SET "mustChangePassword" = false WHERE id = ANY($1::uuid[])`, [users.map((user) => user.id)], pool);
@@ -160,20 +160,20 @@ describe("privacy-preserving trade matching", () => {
 
   it("keeps new profiles hidden and applies owner-only opt-in changes immediately", async () => {
     expect(await getTradingVisibility(ownerCollectorId, pool)).toBe(true);
-    await setOwnTradingVisibility(twoWayHeaders, false, auth, pool);
+    await setOwnTradingVisibility(await resolveSessionPrincipal(twoWayHeaders, auth, pool), false, pool);
     expect(await getTradingVisibility(twoWayCollectorId, pool)).toBe(false);
     expect(await getTradingVisibility(ownerCollectorId, pool)).toBe(true);
     expect((await calculateTradeMatches(ownerCollectorId, ownerCollectionId, {}, pool)).total).toBe(1);
-    await setOwnTradingVisibility(twoWayHeaders, true, auth, pool);
+    await setOwnTradingVisibility(await resolveSessionPrincipal(twoWayHeaders, auth, pool), true, pool);
     expect((await calculateTradeMatches(ownerCollectorId, ownerCollectionId, {}, pool)).total).toBe(2);
 
-    await setOwnTradingVisibility(ownerHeaders, false, auth, pool);
+    await setOwnTradingVisibility(await resolveSessionPrincipal(ownerHeaders, auth, pool), false, pool);
     await expect(calculateTradeMatches(ownerCollectorId, ownerCollectionId, {}, pool)).resolves.toMatchObject({
       enabled: false,
       total: 0,
       matches: [],
     });
-    await setOwnTradingVisibility(ownerHeaders, true, auth, pool);
+    await setOwnTradingVisibility(await resolveSessionPrincipal(ownerHeaders, auth, pool), true, pool);
   });
 
   it("calculates empty, one-way, two-way, and cross-revision matches with stable IDs", async () => {
@@ -233,7 +233,8 @@ describe("privacy-preserving trade matching", () => {
     const response = await handleTradeMatchesRequest(
       new Request(`http://localhost/api/collections/${ownerCollectionId}/trades`, { headers: ownerHeaders }),
       ownerCollectionId,
-      (headers, collectionId, options) => getOwnTradeMatches(headers, collectionId, options, auth, pool),
+      (principal, collectionId, options) => getOwnTradeMatches(principal, collectionId, options, pool),
+      async (request) => resolveSessionPrincipal(request.headers, auth, pool),
     );
     expect(response.status).toBe(200);
     const body = await response.json();
@@ -252,21 +253,24 @@ describe("privacy-preserving trade matching", () => {
     const foreign = await handleTradeMatchesRequest(
       new Request(`http://localhost/api/collections/${twoWayCollectionId}/trades`, { headers: ownerHeaders }),
       twoWayCollectionId,
-      (headers, collectionId, options) => getOwnTradeMatches(headers, collectionId, options, auth, pool),
+      (principal, collectionId, options) => getOwnTradeMatches(principal, collectionId, options, pool),
+      async (request) => resolveSessionPrincipal(request.headers, auth, pool),
     );
     expect(foreign.status).toBe(404);
 
     const anonymous = await handleTradeMatchesRequest(
       new Request(`http://localhost/api/collections/${ownerCollectionId}/trades`),
       ownerCollectionId,
-      (headers, collectionId, options) => getOwnTradeMatches(headers, collectionId, options, auth, pool),
+      (principal, collectionId, options) => getOwnTradeMatches(principal, collectionId, options, pool),
+      async (request) => resolveSessionPrincipal(request.headers, auth, pool),
     );
     expect(anonymous.status).toBe(401);
 
     const admin = await handleTradeMatchesRequest(
       new Request(`http://localhost/api/collections/${ownerCollectionId}/trades`, { headers: adminHeaders }),
       ownerCollectionId,
-      (headers, collectionId, options) => getOwnTradeMatches(headers, collectionId, options, auth, pool),
+      (principal, collectionId, options) => getOwnTradeMatches(principal, collectionId, options, pool),
+      async (request) => resolveSessionPrincipal(request.headers, auth, pool),
     );
     expect(admin.status).toBe(403);
 
@@ -274,7 +278,8 @@ describe("privacy-preserving trade matching", () => {
     const expired = await handleTradeMatchesRequest(
       new Request(`http://localhost/api/collections/${ownerCollectionId}/trades`, { headers: ownerHeaders }),
       ownerCollectionId,
-      (headers, collectionId, options) => getOwnTradeMatches(headers, collectionId, options, auth, pool),
+      (principal, collectionId, options) => getOwnTradeMatches(principal, collectionId, options, pool),
+      async (request) => resolveSessionPrincipal(request.headers, auth, pool),
     );
     expect(expired.status).toBe(401);
   });

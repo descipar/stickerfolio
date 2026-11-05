@@ -1,5 +1,7 @@
 import { afterAll, afterEach, beforeAll, describe, expect, inject, it, vi } from "vitest";
 
+import { createAuth, resolveSessionPrincipal, resolveViewer } from "@/auth";
+import { exportOwnAccountData } from "@/modules/accounts";
 import { createPool, query } from "@/infrastructure/database";
 import { createManagedUser, setManagedUserEmail } from "@/modules/admin";
 import {
@@ -8,10 +10,7 @@ import {
   bootstrapInitialAdmin,
   changeOwnEmail,
   changeOwnPassword,
-  createAuth,
-  exportOwnAccountData,
   PasswordChangeError,
-  resolveIdentity,
 } from "@/modules/identity";
 
 import { createTestEnvironment } from "./create-test-environment";
@@ -46,14 +45,14 @@ describe("self-service password change (#128) and audit coverage (#129)", () => 
     await query(`TRUNCATE "user", albums, collector_profiles CASCADE`, [], pool);
     await bootstrapInitialAdmin(pool);
     const initial = await signIn(bootstrapAdminEmail, bootstrapAdminPassword);
-    await changeOwnPassword(initial, bootstrapAdminPassword, "Audit-admin-1!", auth, pool);
+    await changeOwnPassword(await resolveSessionPrincipal(initial, auth, pool), bootstrapAdminPassword, "Audit-admin-1!", pool);
     adminHeaders = await signIn(bootstrapAdminEmail, "Audit-admin-1!");
-    const created = await createManagedUser(adminHeaders, {
+    const created = await createManagedUser(await resolveSessionPrincipal(adminHeaders, auth, pool), {
       email: "password-user@example.test",
       displayName: "Password user",
       initialPassword: "Initial-pass-1!",
       role: "user",
-    }, auth, pool);
+    }, pool);
     userId = created.id;
   });
 
@@ -65,10 +64,10 @@ describe("self-service password change (#128) and audit coverage (#129)", () => 
     const current = await signIn("password-user@example.test", "Initial-pass-1!");
     const other = await signIn("password-user@example.test", "Initial-pass-1!");
 
-    await changeOwnPassword(current, "Initial-pass-1!", "Changed-pass-2!", auth, pool);
+    await changeOwnPassword(await resolveSessionPrincipal(current, auth, pool), "Initial-pass-1!", "Changed-pass-2!", pool);
 
-    expect(await resolveIdentity(current, auth, pool)).toMatchObject({ userId });
-    expect(await resolveIdentity(other, auth, pool)).toBeNull();
+    expect(await resolveViewer(current, auth, pool)).toMatchObject({ userId });
+    expect(await resolveViewer(other, auth, pool)).toBeNull();
     const user = await query<{ mustChangePassword: boolean }>(
       `SELECT "mustChangePassword" FROM "user" WHERE id = $1`,
       [userId],
@@ -93,15 +92,15 @@ describe("self-service password change (#128) and audit coverage (#129)", () => 
     const current = await signIn("password-user@example.test", "Changed-pass-2!");
     const other = await signIn("password-user@example.test", "Changed-pass-2!");
     await expect(
-      changeOwnPassword(current, "Wrong-pass-9!", "Another-pass-3!", auth, pool),
+      changeOwnPassword(await resolveSessionPrincipal(current, auth, pool), "Wrong-pass-9!", "Another-pass-3!", pool),
     ).rejects.toBeInstanceOf(PasswordChangeError);
-    expect(await resolveIdentity(other, auth, pool)).toMatchObject({ userId });
+    expect(await resolveViewer(other, auth, pool)).toMatchObject({ userId });
     await signIn("password-user@example.test", "Changed-pass-2!");
   });
 
   it("rejects a password outside the policy before touching the account", async () => {
     const current = await signIn("password-user@example.test", "Changed-pass-2!");
-    await expect(changeOwnPassword(current, "Changed-pass-2!", "abc", auth, pool)).rejects.toBeInstanceOf(
+    await expect(changeOwnPassword(await resolveSessionPrincipal(current, auth, pool), "Changed-pass-2!", "abc", pool)).rejects.toBeInstanceOf(
       PasswordChangeError,
     );
   });
@@ -110,9 +109,9 @@ describe("self-service password change (#128) and audit coverage (#129)", () => 
     const output = vi.spyOn(console, "log").mockImplementation(() => undefined);
     const headers = await signIn("password-user@example.test", "Changed-pass-2!");
 
-    await exportOwnAccountData(headers, auth, pool);
-    await changeOwnEmail(headers, "renamed-user@example.test", "Changed-pass-2!", auth, pool);
-    await setManagedUserEmail(adminHeaders, userId, "admin-renamed@example.test", auth, pool);
+    await exportOwnAccountData(await resolveSessionPrincipal(headers, auth, pool), pool);
+    await changeOwnEmail(await resolveSessionPrincipal(headers, auth, pool), "renamed-user@example.test", "Changed-pass-2!", pool);
+    await setManagedUserEmail(await resolveSessionPrincipal(adminHeaders, auth, pool), userId, "admin-renamed@example.test", pool);
 
     const events = auditActions(output);
     expect(events.map((event) => event.action)).toEqual([

@@ -12,7 +12,7 @@ import {
 import { loginEmailSchema } from "@/modules/identity";
 import { maximumPasswordLength, minimumPasswordLength } from "@/shared/password-policy";
 
-import { apiError, requestBodyTooLarge } from "../../../http";
+import { apiError, principalOf, requestBodyTooLarge } from "../../../http";
 
 const idSchema = z.uuid();
 const mutationSchema = z.discriminatedUnion("action", [
@@ -42,13 +42,13 @@ export async function PATCH(
   }
   try {
     if (mutation.data.action === "status") {
-      await setManagedUserStatus(request.headers, userId.data, mutation.data.status);
+      await setManagedUserStatus(await principalOf(request), userId.data, mutation.data.status);
     } else if (mutation.data.action === "role") {
-      await setManagedUserRole(request.headers, userId.data, mutation.data.role);
+      await setManagedUserRole(await principalOf(request), userId.data, mutation.data.role);
     } else if (mutation.data.action === "email") {
-      await setManagedUserEmail(request.headers, userId.data, mutation.data.email);
+      await setManagedUserEmail(await principalOf(request), userId.data, mutation.data.email);
     } else {
-      await resetManagedUserPassword(request.headers, userId.data, mutation.data.password);
+      await resetManagedUserPassword(await principalOf(request), userId.data, mutation.data.password);
     }
     return NextResponse.json({ updated: true });
   } catch (error) {
@@ -68,7 +68,7 @@ export async function DELETE(
     return NextResponse.json({ error: "Invalid account deletion." }, { status: 400 });
   }
   try {
-    await deleteManagedUser(request.headers, userId.data, body.data.confirmationEmail);
+    await deleteManagedUser(await principalOf(request), userId.data, body.data.confirmationEmail);
     return NextResponse.json({ deleted: true });
   } catch (error) {
     return apiError(error, request);

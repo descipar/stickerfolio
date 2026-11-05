@@ -5,6 +5,7 @@ import type { Pool } from "pg";
 import { getEnvironment, type RegistrationMode } from "@/infrastructure/config";
 import { DatabaseError, getPool, query, withTransaction, type QueryExecutor } from "@/infrastructure/database";
 import { writeLog } from "@/infrastructure/observability";
+import { createCollectorProfileForUser } from "@/modules/collectors";
 import { maximumPasswordLength, minimumPasswordLength } from "@/shared/password-policy";
 
 import { normalizeEmail } from "./email";
@@ -256,11 +257,7 @@ export async function acceptInvitation(
         [userId, userId, passwordHash],
         client,
       );
-      await query(
-        "INSERT INTO collector_profiles (user_id, display_name) VALUES ($1, $2)",
-        [userId, displayName],
-        client,
-      );
+      await createCollectorProfileForUser(userId, displayName, client);
       await query(
         `UPDATE invitations SET accepted_at = now(), accepted_by_user_id = $2 WHERE id = $1`,
         [row.id, userId],

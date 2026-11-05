@@ -3,7 +3,7 @@ import { z } from "zod";
 
 import { getOwnCollectionStickers } from "@/modules/collections";
 
-import { apiError } from "../../../http";
+import { apiError, principalOf } from "../../../http";
 
 const idSchema = z.uuid();
 
@@ -14,7 +14,7 @@ export async function GET(
   const parsed = idSchema.safeParse((await context.params).collectionId);
   if (!parsed.success) return NextResponse.json({ error: "Collection not found." }, { status: 404 });
   try {
-    return NextResponse.json({ stickers: await getOwnCollectionStickers(request.headers, parsed.data) });
+    return NextResponse.json({ stickers: await getOwnCollectionStickers(await principalOf(request), parsed.data) });
   } catch (error) {
     return apiError(error, request);
   }

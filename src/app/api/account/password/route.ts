@@ -5,7 +5,7 @@ import { readLimitedJson } from "@/infrastructure/http";
 import { AuthenticationError, changeOwnPassword, PasswordChangeError } from "@/modules/identity";
 import { maximumPasswordLength, minimumPasswordLength } from "@/shared/password-policy";
 
-import { apiError, requestBodyTooLarge } from "../../http";
+import { apiError, principalOf, requestBodyTooLarge } from "../../http";
 
 const bodySchema = z.object({
   currentPassword: z.string().min(1).max(128),
@@ -20,7 +20,7 @@ export async function POST(request: Request): Promise<NextResponse> {
 
   try {
     await changeOwnPassword(
-      request.headers,
+      await principalOf(request),
       parsed.data.currentPassword,
       parsed.data.newPassword,
     );

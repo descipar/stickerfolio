@@ -9,7 +9,7 @@ import {
   getOwnCollectionShares,
 } from "@/modules/collections";
 
-import { apiError, requestBodyTooLarge } from "../../../http";
+import { apiError, principalOf, requestBodyTooLarge } from "../../../http";
 
 const idSchema = z.uuid();
 const createSchema = z.object({
@@ -27,7 +27,7 @@ export async function GET(
     return NextResponse.json({ error: "Collection not found." }, { status: 404 });
   }
   try {
-    const shares = await getOwnCollectionShares(request.headers, collectionId.data);
+    const shares = await getOwnCollectionShares(await principalOf(request), collectionId.data);
     return NextResponse.json(
       {
         shares,
@@ -66,7 +66,7 @@ export async function POST(
       );
     }
     const created = await createOwnCollectionShare(
-      request.headers,
+      await principalOf(request),
       collectionId.data,
       body.data.scope,
       body.data.expiresAt ? new Date(body.data.expiresAt) : null,

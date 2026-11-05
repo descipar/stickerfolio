@@ -5,7 +5,7 @@ import { notFound, redirect } from "next/navigation";
 import { AppNavigation } from "@/components/app-navigation";
 import { TradeMatches } from "@/components/trade-matches";
 import { buildTradeQuery } from "@/components/trade-summary";
-import { resolveIdentity } from "@/modules/identity";
+import { resolveViewer } from "@/auth";
 import {
   getOwnTradeMatches,
   TradingError,
@@ -38,7 +38,7 @@ export default async function TradeMatchesPage({
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
   const requestHeaders = await headers();
-  const identity = await resolveIdentity(requestHeaders);
+  const identity = await resolveViewer(requestHeaders);
   if (!identity) redirect("/login");
   if (identity.mustChangePassword) redirect("/password/change");
   if (!identity.collector) redirect(identity.role === "admin" ? "/admin/users" : "/");
@@ -55,7 +55,7 @@ export default async function TradeMatchesPage({
 
   let result: TradeMatchResult;
   try {
-    result = await getOwnTradeMatches(requestHeaders, collectionId, {
+    result = await getOwnTradeMatches(identity.principal, collectionId, {
       direction,
       ...(section ? { sectionId: section } : {}),
       sort,

@@ -11,8 +11,8 @@ import {
   type InvitationSummary,
   type RegistrationAvailability,
   type RegistrationMode,
-  type StickerfolioAuth,
 } from "@/modules/identity";
+import type { Principal } from "@/shared/principal";
 
 import { AdminError, requireAdmin } from "./users";
 
@@ -34,13 +34,12 @@ interface CreateAdminInvitationInput {
 }
 
 export async function createAdminInvitation(
-  headers: Headers,
+  principal: Principal | null,
   input: CreateAdminInvitationInput,
-  auth?: StickerfolioAuth,
   pool: Pool = getPool(),
   mode?: RegistrationMode,
 ): Promise<CreatedInvitation> {
-  const actor = await requireAdmin(headers, auth, pool);
+  const actor = requireAdmin(principal);
   ensureInvitationMode(mode);
   const invitation = await createInvitation({ ...input, createdByUserId: actor.userId }, pool);
   writeAuditEvent(
@@ -52,21 +51,19 @@ export async function createAdminInvitation(
 }
 
 export async function listAdminInvitations(
-  headers: Headers,
-  auth?: StickerfolioAuth,
+  principal: Principal | null,
   pool: Pool = getPool(),
 ): Promise<InvitationSummary[]> {
-  await requireAdmin(headers, auth, pool);
+  requireAdmin(principal);
   return listInvitations(pool);
 }
 
 export async function revokeAdminInvitation(
-  headers: Headers,
+  principal: Principal | null,
   invitationId: string,
-  auth?: StickerfolioAuth,
   pool: Pool = getPool(),
 ): Promise<void> {
-  const actor = await requireAdmin(headers, auth, pool);
+  const actor = requireAdmin(principal);
   await revokeInvitation(invitationId, pool);
   writeAuditEvent(
     "invitation.revoked",

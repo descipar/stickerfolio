@@ -53,18 +53,6 @@ export interface CollectionExport {
   stickers: CollectionExportSticker[];
 }
 
-export async function createCollectorProfile(
-  displayName: string,
-  executor?: QueryExecutor,
-): Promise<{ id: string; displayName: string }> {
-  const result = await query<{ id: string; display_name: string }>(
-    "INSERT INTO collector_profiles (display_name) VALUES ($1) RETURNING id, display_name",
-    [displayName],
-    executor,
-  );
-  return { id: result.rows[0]!.id, displayName: result.rows[0]!.display_name };
-}
-
 export async function listCollections(
   collectorId: string,
   executor?: QueryExecutor,

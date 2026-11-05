@@ -8,8 +8,9 @@ import {
   readLimitedJson,
 } from "@/infrastructure/http";
 import { getOwnComparisonSetup } from "@/modules/trading";
+import type { Principal } from "@/shared/principal";
 
-import { apiError, requestBodyTooLarge } from "../../http";
+import { apiError, principalOf, requestBodyTooLarge } from "../../http";
 
 const credentialSchema = z
   .object({
@@ -24,6 +25,7 @@ export async function handleComparisonSetupRequest(
   request: Request,
   loadSetup: typeof getOwnComparisonSetup = getOwnComparisonSetup,
   trustedIpHeader?: string,
+  resolvePrincipal: (request: Request) => Promise<Principal | null> = principalOf,
 ): Promise<NextResponse> {
   const key = getAuthenticatedRateLimitKey(request, trustedIpHeader);
   const decision = limiter.consume(`comparison-setup:${key}`, 30, 60_000);
@@ -40,7 +42,7 @@ export async function handleComparisonSetupRequest(
     return NextResponse.json({ error: "Comparison unavailable." }, { status: 404 });
   }
   try {
-    const setup = await loadSetup(request.headers, body.data);
+    const setup = await loadSetup(await resolvePrincipal(request), body.data);
     return NextResponse.json({ setup }, { headers: privateHeaders });
   } catch (error) {
     return apiError(error, request);

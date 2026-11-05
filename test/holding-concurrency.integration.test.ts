@@ -1,12 +1,12 @@
 import { afterAll, beforeAll, describe, expect, inject, it } from "vitest";
 
+import { createCollectorProfile } from "@/modules/collectors";
 import { createPool, query } from "@/infrastructure/database";
 import { seedAlbumTemplate } from "@/modules/catalog";
 import {
   changeHoldingQuantity,
   CollectionError,
   createCollection,
-  createCollectorProfile,
   HoldingConflictError,
 } from "@/modules/collections";
 

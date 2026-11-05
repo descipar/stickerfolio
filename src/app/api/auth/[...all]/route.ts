@@ -1,7 +1,7 @@
 import { toNextJsHandler } from "better-auth/next-js";
 
 import { InMemoryFixedWindowRateLimiter } from "@/infrastructure/http";
-import { getAuth } from "@/modules/identity";
+import { getAuth } from "@/auth";
 
 import {
   defaultSignInSubject,

@@ -1,5 +1,10 @@
 export {
-  requireCollectorContext,
-  type CollectorContext,
-} from "./session";
-export { markCollectorOnboardingComplete, updateCollectorDisplayName } from "./repository";
+  createCollectorProfile,
+  createCollectorProfileForUser,
+  exportCollectorProfile,
+  getCollectorProfileForUser,
+  markCollectorOnboardingComplete,
+  updateCollectorDisplayName,
+  type CollectorProfile,
+  type CollectorProfileExport,
+} from "./repository";

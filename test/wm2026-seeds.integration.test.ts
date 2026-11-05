@@ -1,10 +1,13 @@
 import { afterAll, describe, expect, inject, it } from "vitest";
 
+import { createCollectorProfile } from "@/modules/collectors";
 import { wm2026ExampleHoldings } from "@/data/examples/wm2026-example-holdings";
 import { wm2026Template } from "@/data/wm2026";
 import { createPool, query } from "@/infrastructure/database";
 import { seedAlbumTemplate } from "@/modules/catalog";
-import { createCollectorProfile, seedExampleHoldings } from "@/modules/collections";
+import {
+  seedExampleHoldings,
+} from "@/modules/collections";
 
 import { createTestEnvironment } from "./create-test-environment";
 

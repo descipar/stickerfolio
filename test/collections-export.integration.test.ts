@@ -1,11 +1,11 @@
 import { afterAll, beforeAll, describe, expect, inject, it } from "vitest";
 
+import { createCollectorProfile } from "@/modules/collectors";
 import { createPool, query } from "@/infrastructure/database";
 import { seedAlbumTemplate } from "@/modules/catalog";
 import {
   CollectionError,
   createCollection,
-  createCollectorProfile,
   exportFileName,
   loadCollectionExport,
   serializeCollectionExport,

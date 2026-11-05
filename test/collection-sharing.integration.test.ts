@@ -1,5 +1,6 @@
 import { afterAll, beforeAll, describe, expect, inject, it, vi } from "vitest";
 
+import { createAuth, resolveSessionPrincipal } from "@/auth";
 import { createPool, query } from "@/infrastructure/database";
 import { createManagedUser } from "@/modules/admin";
 import { seedAlbumTemplate } from "@/modules/catalog";
@@ -18,7 +19,6 @@ import {
   bootstrapAdminPassword,
   bootstrapInitialAdmin,
   changeOwnPassword,
-  createAuth,
 } from "@/modules/identity";
 
 import { createTestEnvironment } from "./create-test-environment";
@@ -77,20 +77,20 @@ describe("revocable public collection sharing", () => {
 
     await bootstrapInitialAdmin(pool);
     const initialAdmin = await signIn(bootstrapAdminEmail, bootstrapAdminPassword);
-    await changeOwnPassword(initialAdmin, bootstrapAdminPassword, "Admin-share-1!", auth, pool);
+    await changeOwnPassword(await resolveSessionPrincipal(initialAdmin, auth, pool), bootstrapAdminPassword, "Admin-share-1!", pool);
     const adminHeaders = await signIn(bootstrapAdminEmail, "Admin-share-1!");
-    const owner = await createManagedUser(adminHeaders, {
+    const owner = await createManagedUser(await resolveSessionPrincipal(adminHeaders, auth, pool), {
       email: "share-owner@example.test",
       displayName: "Share Owner",
       initialPassword: "Owner-share-1!",
       role: "user",
-    }, auth, pool);
-    const other = await createManagedUser(adminHeaders, {
+    }, pool);
+    const other = await createManagedUser(await resolveSessionPrincipal(adminHeaders, auth, pool), {
       email: "share-other@example.test",
       displayName: "Other Collector",
       initialPassword: "Other-share-1!",
       role: "user",
-    }, auth, pool);
+    }, pool);
     await query(
       `UPDATE "user" SET "mustChangePassword" = false WHERE id = ANY($1::uuid[])`,
       [[owner.id, other.id]],
@@ -122,13 +122,11 @@ describe("revocable public collection sharing", () => {
   it("creates an owner-scoped link while storing and logging no plaintext token", async () => {
     const output = vi.spyOn(console, "log").mockImplementation(() => undefined);
     const created = await createOwnCollectionShare(
-      ownerHeaders,
+      await resolveSessionPrincipal(ownerHeaders, auth, pool),
       ownerCollectionId,
       "both",
       new Date("2030-01-01T00:00:00.000Z"),
-      auth,
-      pool,
-    );
+      pool);
     shareId = created.share.id;
     shareToken = created.token;
 
@@ -141,19 +139,17 @@ describe("revocable public collection sharing", () => {
     expect(stored.rows[0]?.token_hash).toMatch(/^[a-f0-9]{64}$/);
     expect(stored.rows[0]?.token_hash).not.toBe(shareToken);
     expect(JSON.stringify(await getOwnCollectionShares(
-      ownerHeaders,
+      await resolveSessionPrincipal(ownerHeaders, auth, pool),
       ownerCollectionId,
-      auth,
-      pool,
-    ))).not.toContain(shareToken);
+      pool))).not.toContain(shareToken);
     expect(output.mock.calls.flat().join(" ")).not.toContain(shareToken);
     output.mockRestore();
 
     await expect(
-      getOwnCollectionShares(otherHeaders, ownerCollectionId, auth, pool),
+      getOwnCollectionShares(await resolveSessionPrincipal(otherHeaders, auth, pool), ownerCollectionId, pool),
     ).rejects.toMatchObject({ status: 404 });
     await expect(
-      createOwnCollectionShare(otherHeaders, ownerCollectionId, "missing", null, auth, pool),
+      createOwnCollectionShare(await resolveSessionPrincipal(otherHeaders, auth, pool), ownerCollectionId, "missing", null, pool),
     ).rejects.toMatchObject({ status: 404 });
   });
 
@@ -201,13 +197,11 @@ describe("revocable public collection sharing", () => {
 
     await setHoldingQuantity(ownerCollectorId, ownerCollectionId, stickerA2, 0, pool);
     await updateOwnCollectionShare(
-      ownerHeaders,
+      await resolveSessionPrincipal(ownerHeaders, auth, pool),
       ownerCollectionId,
       shareId,
       { scope: "missing" },
-      auth,
-      pool,
-    );
+      pool);
     const missingOnly = await loadSharedCollection(shareToken, pool);
     expect(missingOnly).toMatchObject({
       scope: "missing",
@@ -220,40 +214,34 @@ describe("revocable public collection sharing", () => {
   it("makes expiration, revocation, and unknown tokens indistinguishable publicly", async () => {
     await expect(
       createOwnCollectionShare(
-        ownerHeaders,
+        await resolveSessionPrincipal(ownerHeaders, auth, pool),
         ownerCollectionId,
         "both",
         new Date("2020-01-01T00:00:00.000Z"),
-        auth,
-        pool,
-      ),
+        pool),
     ).rejects.toBeInstanceOf(CollectionError);
 
     await updateOwnCollectionShare(
-      ownerHeaders,
+      await resolveSessionPrincipal(ownerHeaders, auth, pool),
       ownerCollectionId,
       shareId,
       { expiresAt: new Date() },
-      auth,
-      pool,
-    );
+      pool);
     expect(await loadSharedCollection(shareToken, pool)).toBeNull();
-    expect((await getOwnCollectionShares(ownerHeaders, ownerCollectionId, auth, pool))[0]).toMatchObject({
+    expect((await getOwnCollectionShares(await resolveSessionPrincipal(ownerHeaders, auth, pool), ownerCollectionId, pool))[0]).toMatchObject({
       id: shareId,
       status: "expired",
     });
 
     const revocable = await createOwnCollectionShare(
-      ownerHeaders,
+      await resolveSessionPrincipal(ownerHeaders, auth, pool),
       ownerCollectionId,
       "duplicates",
       null,
-      auth,
-      pool,
-    );
+      pool);
     await expect(loadSharedCollection(revocable.token, pool)).resolves.not.toBeNull();
     await expect(
-      revokeOwnCollectionShare(ownerHeaders, ownerCollectionId, revocable.share.id, auth, pool),
+      revokeOwnCollectionShare(await resolveSessionPrincipal(ownerHeaders, auth, pool), ownerCollectionId, revocable.share.id, pool),
     ).resolves.toBe(true);
     expect(await loadSharedCollection(revocable.token, pool)).toBeNull();
     expect(await loadSharedCollection("A".repeat(43), pool)).toBeNull();

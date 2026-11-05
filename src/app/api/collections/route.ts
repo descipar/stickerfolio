@@ -4,13 +4,13 @@ import { z } from "zod";
 import { readLimitedJson } from "@/infrastructure/http";
 import { addOwnCollection, getCollectionsOverview } from "@/modules/collections";
 
-import { apiError, requestBodyTooLarge } from "../http";
+import { apiError, principalOf, requestBodyTooLarge } from "../http";
 
 const createSchema = z.object({ albumId: z.uuid() });
 
 export async function GET(request: Request): Promise<NextResponse> {
   try {
-    return NextResponse.json(await getCollectionsOverview(request.headers));
+    return NextResponse.json(await getCollectionsOverview(await principalOf(request)));
   } catch (error) {
     return apiError(error, request);
   }
@@ -22,7 +22,7 @@ export async function POST(request: Request): Promise<NextResponse> {
   const body = createSchema.safeParse(requestBody.status === "ok" ? requestBody.value : null);
   if (!body.success) return NextResponse.json({ error: "Invalid album." }, { status: 400 });
   try {
-    const collection = await addOwnCollection(request.headers, body.data.albumId);
+    const collection = await addOwnCollection(await principalOf(request), body.data.albumId);
     return NextResponse.json(collection, { status: 201 });
   } catch (error) {
     return apiError(error, request);

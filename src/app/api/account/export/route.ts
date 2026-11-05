@@ -1,13 +1,13 @@
 import { NextResponse } from "next/server";
 
-import { accountExportFileName, exportOwnAccountData } from "@/modules/identity";
+import { accountExportFileName, exportOwnAccountData } from "@/modules/accounts";
 
-import { apiError } from "../../http";
+import { apiError, principalOf } from "../../http";
 
 export async function GET(request: Request): Promise<NextResponse> {
   try {
     const exportedAt = new Date();
-    const data = await exportOwnAccountData(request.headers, undefined, undefined, exportedAt);
+    const data = await exportOwnAccountData(await principalOf(request), undefined, exportedAt);
     return new NextResponse(`${JSON.stringify(data, null, 2)}\n`, {
       status: 200,
       headers: {

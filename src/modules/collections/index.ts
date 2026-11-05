@@ -2,7 +2,6 @@ export {
   changeHoldingQuantity,
   CollectionError,
   createCollection,
-  createCollectorProfile,
   listCollections,
   loadCollectionExport,
   loadCollectionStickers,
@@ -54,3 +53,4 @@ export {
   type SharedSection,
   type SharedSticker,
 } from "./sharing";
+export { exportCollectionsForCollector, type CollectionDataExport } from "./export";

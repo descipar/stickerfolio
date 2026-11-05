@@ -4,7 +4,7 @@ import { z } from "zod";
 import { readLimitedJson } from "@/infrastructure/http";
 import { updateAdminAlbumMetadata } from "@/modules/admin";
 
-import { apiError, requestBodyTooLarge } from "../../../http";
+import { apiError, principalOf, requestBodyTooLarge } from "../../../http";
 
 const idSchema = z.uuid();
 const metadataSchema = z.object({
@@ -26,7 +26,7 @@ export async function PATCH(
   }
   try {
     await updateAdminAlbumMetadata(
-      request.headers,
+      await principalOf(request),
       albumId.data,
       metadata.data.revisionId,
       { title: metadata.data.title, description: metadata.data.description },

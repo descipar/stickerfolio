@@ -10,7 +10,7 @@ import {
   type QueryExecutor,
 } from "@/infrastructure/database";
 import { writeAuditEvent } from "@/infrastructure/observability";
-import { requireCollectorContext } from "@/modules/collectors";
+import { type Principal, requireCollectorPrincipal } from "@/shared/principal";
 
 import type { TradeSticker } from "./matching";
 
@@ -85,7 +85,6 @@ interface DirectMatchRow {
   partner_quantity: number;
 }
 
-type CollectorAuth = Parameters<typeof requireCollectorContext>[1];
 
 export class DirectComparisonError extends Error {
   readonly status = 404;
@@ -487,13 +486,12 @@ function auditRedemption(userId: string): GrantRedeemedListener {
 }
 
 export async function createOwnComparisonGrant(
-  headers: Headers,
+  principal: Principal | null,
   collectionId: string,
-  auth?: CollectorAuth,
   pool: Pool = getPool(),
 ): Promise<{ grant: ComparisonGrantSummary; token: string; code: string }> {
-  const identity = await requireCollectorContext(headers, auth, pool);
-  const created = await createComparisonGrant(identity.collector.id, collectionId, pool);
+  const identity = requireCollectorPrincipal(principal);
+  const created = await createComparisonGrant(identity.collectorId, collectionId, pool);
   writeAuditEvent(
     "comparison_grant.created",
     { type: "user", userId: identity.userId },
@@ -504,24 +502,22 @@ export async function createOwnComparisonGrant(
 }
 
 export async function getOwnComparisonGrants(
-  headers: Headers,
+  principal: Principal | null,
   collectionId: string,
-  auth?: CollectorAuth,
   pool: Pool = getPool(),
 ): Promise<ComparisonGrantSummary[]> {
-  const identity = await requireCollectorContext(headers, auth, pool);
-  return listComparisonGrants(identity.collector.id, collectionId, pool);
+  const identity = requireCollectorPrincipal(principal);
+  return listComparisonGrants(identity.collectorId, collectionId, pool);
 }
 
 export async function revokeOwnComparisonGrant(
-  headers: Headers,
+  principal: Principal | null,
   collectionId: string,
   grantId: string,
-  auth?: CollectorAuth,
   pool: Pool = getPool(),
 ): Promise<boolean> {
-  const identity = await requireCollectorContext(headers, auth, pool);
-  const revoked = await revokeComparisonGrant(identity.collector.id, collectionId, grantId, pool);
+  const identity = requireCollectorPrincipal(principal);
+  const revoked = await revokeComparisonGrant(identity.collectorId, collectionId, grantId, pool);
   if (revoked) {
     writeAuditEvent(
       "comparison_grant.revoked",
@@ -533,14 +529,13 @@ export async function revokeOwnComparisonGrant(
 }
 
 export async function getOwnComparisonSetup(
-  headers: Headers,
+  principal: Principal | null,
   credential: ComparisonCredential,
-  auth?: CollectorAuth,
   pool: Pool = getPool(),
 ): Promise<ComparisonSetup> {
-  const identity = await requireCollectorContext(headers, auth, pool);
+  const identity = requireCollectorPrincipal(principal);
   const setup = await prepareDirectComparison(
-    identity.collector.id,
+    identity.collectorId,
     credential,
     pool,
     new Date(),
@@ -551,15 +546,14 @@ export async function getOwnComparisonSetup(
 }
 
 export async function getOwnDirectComparison(
-  headers: Headers,
+  principal: Principal | null,
   collectionId: string,
   credential: ComparisonCredential,
-  auth?: CollectorAuth,
   pool: Pool = getPool(),
 ): Promise<DirectComparisonResult> {
-  const identity = await requireCollectorContext(headers, auth, pool);
+  const identity = requireCollectorPrincipal(principal);
   const result = await calculateDirectComparison(
-    identity.collector.id,
+    identity.collectorId,
     collectionId,
     credential,
     pool,

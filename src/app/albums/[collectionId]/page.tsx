@@ -4,10 +4,10 @@ import { redirect } from "next/navigation";
 
 import { AppNavigation } from "@/components/app-navigation";
 import { CollectionView } from "@/components/collection-view";
-import { resolveIdentity } from "@/modules/identity";
+import { resolveViewer } from "@/auth";
 
 export default async function CollectionPage({ params }: { params: Promise<{ collectionId: string }> }) {
-  const identity = await resolveIdentity(await headers());
+  const identity = await resolveViewer(await headers());
   if (!identity) redirect("/login");
   if (identity.mustChangePassword) redirect("/password/change");
   if (!identity.collector) redirect(identity.role === "admin" ? "/admin/users" : "/");

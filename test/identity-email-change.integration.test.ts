@@ -1,5 +1,6 @@
 import { afterAll, beforeAll, describe, expect, inject, it, vi } from "vitest";
 
+import { createAuth, resolveSessionPrincipal } from "@/auth";
 import { createPool, query } from "@/infrastructure/database";
 import { AdminError, createManagedUser, setManagedUserEmail } from "@/modules/admin";
 import {
@@ -9,7 +10,6 @@ import {
   bootstrapInitialAdmin,
   changeOwnEmail,
   changeOwnPassword,
-  createAuth,
   normalizeEmail,
 } from "@/modules/identity";
 
@@ -44,23 +44,23 @@ describe("login email changes (self-service and admin)", () => {
     await query(`TRUNCATE "user", albums, collector_profiles CASCADE`, [], pool);
     await bootstrapInitialAdmin(pool);
     const initial = await signIn(bootstrapAdminEmail, bootstrapAdminPassword);
-    await changeOwnPassword(initial.headers, bootstrapAdminPassword, "Admin-1!", auth, pool);
+    await changeOwnPassword(await resolveSessionPrincipal(initial.headers, auth, pool), bootstrapAdminPassword, "Admin-1!", pool);
     adminHeaders = (await signIn(bootstrapAdminEmail, "Admin-1!")).headers;
     const admin = await query<{ id: string }>(`SELECT id FROM "user" WHERE email = $1`, [bootstrapAdminEmail], pool);
     adminId = admin.rows[0]!.id;
 
-    const alice = await createManagedUser(adminHeaders, {
+    const alice = await createManagedUser(await resolveSessionPrincipal(adminHeaders, auth, pool), {
       email: "alice@example.test",
       displayName: "Alice",
       initialPassword: "Alice-pass-1!",
       role: "user",
-    }, auth, pool);
-    const bob = await createManagedUser(adminHeaders, {
+    }, pool);
+    const bob = await createManagedUser(await resolveSessionPrincipal(adminHeaders, auth, pool), {
       email: "bob@example.test",
       displayName: "Bob",
       initialPassword: "Bob-pass-1!",
       role: "user",
-    }, auth, pool);
+    }, pool);
     aliceId = alice.id;
     bobId = bob.id;
     await query(`UPDATE "user" SET "mustChangePassword" = false WHERE id = ANY($1::uuid[])`, [[alice.id, bob.id]], pool);
@@ -74,7 +74,7 @@ describe("login email changes (self-service and admin)", () => {
   });
 
   it("changes a user's own email, normalizes it, and revokes their sessions", async () => {
-    await changeOwnEmail(aliceHeaders, "  Alice-New@Example.Test  ", "Alice-pass-1!", auth, pool);
+    await changeOwnEmail(await resolveSessionPrincipal(aliceHeaders, auth, pool), "  Alice-New@Example.Test  ", "Alice-pass-1!", pool);
     await expect(auth.api.getSession({ headers: aliceHeaders })).resolves.toBeNull();
     expect((await signIn("alice@example.test", "Alice-pass-1!")).response.status).not.toBe(200);
     const newLogin = await signIn("alice-new@example.test", "Alice-pass-1!");
@@ -86,13 +86,13 @@ describe("login email changes (self-service and admin)", () => {
 
   it("rejects a self-service change with the wrong current password", async () => {
     await expect(
-      changeOwnEmail(aliceHeaders, "another@example.test", "wrong-password", auth, pool),
+      changeOwnEmail(await resolveSessionPrincipal(aliceHeaders, auth, pool), "another@example.test", "wrong-password", pool),
     ).rejects.toBeInstanceOf(EmailChangeError);
   });
 
   it("returns a neutral conflict when the address is already taken (self-service)", async () => {
     await expect(
-      changeOwnEmail(aliceHeaders, "bob@example.test", "Alice-pass-1!", auth, pool),
+      changeOwnEmail(await resolveSessionPrincipal(aliceHeaders, auth, pool), "bob@example.test", "Alice-pass-1!", pool),
     ).rejects.toMatchObject({ status: 409, message: "This email address is not available." });
     // The failed change must leave the current session and address untouched.
     await expect(auth.api.getSession({ headers: aliceHeaders })).resolves.not.toBeNull();
@@ -101,7 +101,7 @@ describe("login email changes (self-service and admin)", () => {
   it("lets an administrator change another user's email and revokes that user's sessions", async () => {
     const bobHeaders = (await signIn("bob@example.test", "Bob-pass-1!")).headers;
     const output = vi.spyOn(console, "log").mockImplementation(() => undefined);
-    await setManagedUserEmail(adminHeaders, bobId, "  Bob-New@Example.Test  ", auth, pool);
+    await setManagedUserEmail(await resolveSessionPrincipal(adminHeaders, auth, pool), bobId, "  Bob-New@Example.Test  ", pool);
     const auditEvent = output.mock.calls
       .map(([message]) => JSON.parse(String(message)) as Record<string, unknown>)
       .find((entry) => entry.event === "security.audit");
@@ -125,7 +125,7 @@ describe("login email changes (self-service and admin)", () => {
 
   it("forbids a non-admin from changing another user's email", async () => {
     await expect(
-      setManagedUserEmail(aliceHeaders, bobId, "hijack@example.test", auth, pool),
+      setManagedUserEmail(await resolveSessionPrincipal(aliceHeaders, auth, pool), bobId, "hijack@example.test", pool),
     ).rejects.toBeInstanceOf(AdminError);
     const bob = await query<{ email: string }>(`SELECT email FROM "user" WHERE id = $1`, [bobId], pool);
     expect(bob.rows[0]?.email).toBe("bob-new@example.test");
@@ -133,10 +133,10 @@ describe("login email changes (self-service and admin)", () => {
 
   it("rejects an admin change to an address that is already in use and an unknown user", async () => {
     await expect(
-      setManagedUserEmail(adminHeaders, aliceId, "bob-new@example.test", auth, pool),
+      setManagedUserEmail(await resolveSessionPrincipal(adminHeaders, auth, pool), aliceId, "bob-new@example.test", pool),
     ).rejects.toMatchObject({ status: 409 });
     await expect(
-      setManagedUserEmail(adminHeaders, crypto.randomUUID(), "ghost@example.test", auth, pool),
+      setManagedUserEmail(await resolveSessionPrincipal(adminHeaders, auth, pool), crypto.randomUUID(), "ghost@example.test", pool),
     ).rejects.toMatchObject({ status: 404 });
   });
 });

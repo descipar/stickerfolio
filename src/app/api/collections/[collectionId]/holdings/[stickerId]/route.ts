@@ -4,7 +4,7 @@ import { z } from "zod";
 import { readLimitedJson } from "@/infrastructure/http";
 import { changeOwnHoldingQuantity, HoldingConflictError, type HoldingChange } from "@/modules/collections";
 
-import { apiError, requestBodyTooLarge } from "../../../../http";
+import { apiError, principalOf, requestBodyTooLarge } from "../../../../http";
 
 const paramsSchema = z.object({ collectionId: z.uuid(), stickerId: z.uuid() });
 const quantity = z.number().int().min(0).max(99);
@@ -34,7 +34,7 @@ export async function PUT(
   }
   try {
     const result = await changeOwnHoldingQuantity(
-      request.headers,
+      await principalOf(request),
       params.data.collectionId,
       params.data.stickerId,
       toChange(body.data),

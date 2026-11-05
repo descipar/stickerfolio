@@ -3,10 +3,10 @@ import { redirect } from "next/navigation";
 
 import { AdminAlbums } from "@/components/admin-albums";
 import { AppNavigation } from "@/components/app-navigation";
-import { resolveIdentity } from "@/modules/identity";
+import { resolveViewer } from "@/auth";
 
 export default async function AdminAlbumsPage() {
-  const identity = await resolveIdentity(await headers());
+  const identity = await resolveViewer(await headers());
   if (!identity) redirect("/login");
   if (identity.mustChangePassword) redirect("/password/change");
   if (identity.role !== "admin") redirect("/albums");

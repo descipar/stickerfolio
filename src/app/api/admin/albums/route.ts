@@ -3,13 +3,13 @@ import { NextResponse } from "next/server";
 import { readLimitedText } from "@/infrastructure/http";
 import { importAdminAlbumTemplate, listAdminAlbums } from "@/modules/admin";
 
-import { apiError } from "../../http";
+import { apiError, principalOf } from "../../http";
 
 const maximumTemplateBytes = 2 * 1024 * 1024;
 
 export async function GET(request: Request): Promise<NextResponse> {
   try {
-    return NextResponse.json({ albums: await listAdminAlbums(request.headers) });
+    return NextResponse.json({ albums: await listAdminAlbums(await principalOf(request)) });
   } catch (error) {
     return apiError(error, request);
   }
@@ -30,7 +30,7 @@ export async function POST(request: Request): Promise<NextResponse> {
     return NextResponse.json({ error: "The album template is not valid JSON." }, { status: 400 });
   }
   try {
-    return NextResponse.json(await importAdminAlbumTemplate(request.headers, template), { status: 201 });
+    return NextResponse.json(await importAdminAlbumTemplate(await principalOf(request), template), { status: 201 });
   } catch (error) {
     return apiError(error, request);
   }

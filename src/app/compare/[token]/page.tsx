@@ -4,7 +4,7 @@ import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 
 import { AppNavigation, DirectComparisonJoin } from "@/components";
-import { resolveIdentity } from "@/modules/identity";
+import { resolveViewer } from "@/auth";
 import {
   DirectComparisonError,
   getOwnComparisonSetup,
@@ -26,7 +26,7 @@ export default async function ComparisonLinkPage({
   params: Promise<{ token: string }>;
 }) {
   const requestHeaders = await headers();
-  const identity = await resolveIdentity(requestHeaders);
+  const identity = await resolveViewer(requestHeaders);
   if (!identity) redirect("/login");
   if (identity.mustChangePassword) redirect("/password/change");
   if (!identity.collector) redirect(identity.role === "admin" ? "/admin/users" : "/");
@@ -36,7 +36,7 @@ export default async function ComparisonLinkPage({
   if (!isComparisonToken(token)) notFound();
   let setup;
   try {
-    setup = await getOwnComparisonSetup(requestHeaders, { token });
+    setup = await getOwnComparisonSetup(identity.principal, { token });
   } catch (error) {
     if (error instanceof DirectComparisonError) notFound();
     throw error;

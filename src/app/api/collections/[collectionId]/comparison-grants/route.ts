@@ -9,7 +9,7 @@ import {
   getOwnComparisonGrants,
 } from "@/modules/trading";
 
-import { apiError } from "../../../http";
+import { apiError, principalOf } from "../../../http";
 
 const idSchema = z.uuid();
 const privateHeaders = { "Cache-Control": "private, no-store" };
@@ -27,7 +27,7 @@ export async function GET(
     return NextResponse.json({ error: "Comparison unavailable." }, { status: 404 });
   }
   try {
-    const grants = await getOwnComparisonGrants(request.headers, collectionId.data);
+    const grants = await getOwnComparisonGrants(await principalOf(request), collectionId.data);
     return NextResponse.json({ grants }, { headers: privateHeaders });
   } catch (error) {
     return apiError(error, request);
@@ -54,7 +54,7 @@ export async function POST(
     );
   }
   try {
-    const created = await createOwnComparisonGrant(request.headers, collectionId.data);
+    const created = await createOwnComparisonGrant(await principalOf(request), collectionId.data);
     const url = new URL(`/compare/${created.token}`, getEnvironment().appBaseUrl).toString();
     const qrDataUrl = await QRCode.toDataURL(url, {
       errorCorrectionLevel: "M",

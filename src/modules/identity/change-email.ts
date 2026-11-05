@@ -2,11 +2,10 @@ import type { Pool } from "pg";
 
 import { DatabaseError, getPool, query, withTransaction } from "@/infrastructure/database";
 import { writeAuditEvent } from "@/infrastructure/observability";
+import { type Principal, requirePrincipal } from "@/shared/principal";
 
-import { getAuth, type StickerfolioAuth } from "./auth";
 import { normalizeEmail } from "./email";
 import { verifyPassword } from "./password";
-import { requireIdentity } from "./session";
 
 export class EmailChangeError extends Error {
   constructor(
@@ -24,13 +23,12 @@ export class EmailChangeError extends Error {
  * id, so a user can never change another account's email.
  */
 export async function changeOwnEmail(
-  headers: Headers,
+  principal: Principal | null,
   newEmail: string,
   currentPassword: string,
-  auth: StickerfolioAuth = getAuth(),
   pool: Pool = getPool(),
 ): Promise<void> {
-  const identity = await requireIdentity(headers, auth, pool);
+  const identity = requirePrincipal(principal);
 
   const account = await query<{ password: string | null }>(
     `SELECT password FROM account

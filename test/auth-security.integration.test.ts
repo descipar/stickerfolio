@@ -1,11 +1,11 @@
 import { afterAll, beforeAll, describe, expect, inject, it } from "vitest";
 
+import { createAuth } from "@/auth";
 import { createPool, query } from "@/infrastructure/database";
 import {
   bootstrapAdminEmail,
   bootstrapAdminPassword,
   bootstrapInitialAdmin,
-  createAuth,
 } from "@/modules/identity";
 
 import { createTestEnvironment } from "./create-test-environment";

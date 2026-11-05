@@ -1,7 +1,7 @@
 import type { Pool } from "pg";
 
 import { getPool, query, type QueryExecutor } from "@/infrastructure/database";
-import { requireCollectorContext } from "@/modules/collectors";
+import { type Principal, requireCollectorPrincipal } from "@/shared/principal";
 
 export async function getTradingVisibility(
   collectorId: string,
@@ -30,23 +30,20 @@ export async function setTradingVisibility(
   );
 }
 
-type CollectorAuth = Parameters<typeof requireCollectorContext>[1];
 
 export async function getOwnTradingVisibility(
-  headers: Headers,
-  auth?: CollectorAuth,
+  principal: Principal | null,
   pool: Pool = getPool(),
 ): Promise<boolean> {
-  const identity = await requireCollectorContext(headers, auth, pool);
-  return getTradingVisibility(identity.collector.id, pool);
+  const identity = requireCollectorPrincipal(principal);
+  return getTradingVisibility(identity.collectorId, pool);
 }
 
 export async function setOwnTradingVisibility(
-  headers: Headers,
+  principal: Principal | null,
   visible: boolean,
-  auth?: CollectorAuth,
   pool: Pool = getPool(),
 ): Promise<void> {
-  const identity = await requireCollectorContext(headers, auth, pool);
-  await setTradingVisibility(identity.collector.id, visible, pool);
+  const identity = requireCollectorPrincipal(principal);
+  await setTradingVisibility(identity.collectorId, visible, pool);
 }
