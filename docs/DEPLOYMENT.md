@@ -160,7 +160,7 @@ git pull --ff-only
 docker compose up --detach --build
 ```
 
-The migration service applies pending forward migrations before the new application container starts. Existing database data and `.env` are retained. Review release changes and keep a current backup before updating.
+The migration service applies pending forward migrations before the new application container starts. Existing database data and `.env` are retained. When updating an installation whose first administrator has already changed the temporary password, `./start.sh` does not print the bootstrap login; sign in with the existing accounts. Review release changes and keep a current backup before updating.
 
 ## Inspecting deployment state
 

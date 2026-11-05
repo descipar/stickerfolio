@@ -98,9 +98,32 @@ printf '\nLoading the bundled empty album catalogs...\n'
 docker compose run --rm --no-deps migrate \
   node node_modules/tsx/dist/cli.mjs scripts/seed-bundled-catalogs.ts
 
+# Print the bootstrap login only while it is still valid: the first admin
+# exists and has not yet replaced the temporary password. When an existing
+# installation is updated, the operator keeps signing in with their own account.
+bootstrap_login_state() {
+  docker compose exec -T postgres psql --username stickerfolio --dbname stickerfolio \
+    --tuples-only --no-align --command \
+    "SELECT CASE WHEN EXISTS (SELECT 1 FROM \"user\" WHERE email = 'admin@stickerfolio.local' AND \"mustChangePassword\") THEN 'pending' ELSE 'done' END" \
+    2>/dev/null | tr -d '[:space:]'
+}
+
 printf '\nStickerfolio is ready.\n\n'
 printf 'Open:     %s\n' "$app_url"
-printf 'Email:    admin@stickerfolio.local\n'
-printf 'Password: admin123!\n\n'
-printf 'You must change the initial password after signing in.\n'
-printf 'No collector, personal album, holding, duplicate, or example holding was created.\n'
+case "$(bootstrap_login_state || true)" in
+  pending)
+    printf 'Email:    admin@stickerfolio.local\n'
+    printf 'Password: admin123!\n\n'
+    printf 'You must change the initial password after signing in.\n'
+    printf 'No collector, personal album, holding, duplicate, or example holding was created.\n'
+    ;;
+  done)
+    printf '\nThe existing installation was updated. Sign in with your existing account;\n'
+    printf 'accounts, passwords, collections, and holdings were kept.\n'
+    ;;
+  *)
+    printf '\nThe sign-in state could not be read from the bundled database.\n'
+    printf 'A new installation signs in as admin@stickerfolio.local with admin123!;\n'
+    printf 'an updated installation keeps its existing accounts and passwords.\n'
+    ;;
+esac
