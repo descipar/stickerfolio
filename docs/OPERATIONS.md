@@ -38,6 +38,47 @@ curl --fail http://localhost:3500/api/health/ready
 curl --fail http://localhost:3500/api/version
 ```
 
+## Logs and audit trail
+
+The application writes one JSON object per line to stdout. Sensitive keys
+(passwords, tokens, cookies, email addresses, holdings, connection strings) are
+redacted before writing.
+
+- `level: "error"`, `event: "api.unexpected_error"`: an API request failed for
+  an unexpected reason. The line contains the redacted error and the route with
+  identifiers replaced (`PUT /api/collections/:id/holdings/:id`). The client
+  only receives a generic 500.
+- `event: "security.audit"`: a security-relevant action. `audit.action` is one
+  of: account created, email changed, exported, password changed or reset, role
+  or status changed, deactivated or deleted; failed or throttled sign-in;
+  album revision published or archived; share link created, updated or
+  revoked; comparison grant created, redeemed or revoked; invitation created
+  or revoked; registration mode configured. Events carry actor and target ids,
+  never email addresses, passwords, or holdings. Failed sign-ins are keyed by
+  a keyed hash (HMAC with `BETTER_AUTH_SECRET`) of the normalized address, so
+  attempts against one account can be correlated without storing it.
+
+Decision: audit events stay in the log stream rather than a database table.
+That keeps them out of account deletion and backups and needs no extra
+retention job. Retention is therefore an operator responsibility:
+
+- Both Compose files rotate the app container log with the `json-file`
+  driver: `APP_LOG_MAX_SIZE` (default `20m`) times `APP_LOG_MAX_FILE`
+  (default `10`) per container. Rotated-out lines are lost, and so is the log
+  when the container is removed.
+- To keep the audit trail longer, ship the container log to a separate store,
+  for example a Docker logging driver (`journald`, `syslog`, `fluentd`,
+  `gelf`) or a collector reading `docker compose logs`, and filter
+  `event == "security.audit"`. A retention of 90 days to one year is typical
+  for a small deployment. Delete older records according to your privacy
+  policy, as they contain user ids.
+
+Extract the audit trail from the local log:
+
+```bash
+docker compose logs --no-log-prefix app | grep '"security.audit"'
+```
+
 ## Backup with bundled PostgreSQL
 
 Store backups outside containers and committed volumes:

@@ -104,15 +104,18 @@ describe("login email changes (self-service and admin)", () => {
     await setManagedUserEmail(adminHeaders, bobId, "  Bob-New@Example.Test  ", auth, pool);
     const auditEvent = output.mock.calls
       .map(([message]) => JSON.parse(String(message)) as Record<string, unknown>)
-      .find((entry) => entry.event === "identity.email_changed");
+      .find((entry) => entry.event === "security.audit");
     output.mockRestore();
 
     expect(auditEvent).toMatchObject({
       level: "info",
-      event: "identity.email_changed",
-      userId: bobId,
-      actor: "admin",
-      actorUserId: adminId,
+      event: "security.audit",
+      audit: {
+        action: "account.email_changed",
+        actorUserId: adminId,
+        targetType: "user",
+        targetId: bobId,
+      },
     });
     expect(JSON.stringify(auditEvent).toLowerCase()).not.toContain("bob-new@example.test");
     await expect(auth.api.getSession({ headers: bobHeaders })).resolves.toBeNull();

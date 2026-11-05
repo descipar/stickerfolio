@@ -19,6 +19,6 @@ export async function DELETE(
       ? new NextResponse(null, { status: 204 })
       : NextResponse.json({ error: "Collection not found." }, { status: 404 });
   } catch (error) {
-    return apiError(error);
+    return apiError(error, request);
   }
 }

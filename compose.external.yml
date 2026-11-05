@@ -41,3 +41,10 @@ services:
       retries: 12
       start_period: 10s
     restart: unless-stopped
+    # Application and audit logs go to stdout. Rotate them locally; see
+    # docs/OPERATIONS.md "Logs and audit trail" for retention guidance.
+    logging:
+      driver: json-file
+      options:
+        max-size: "${APP_LOG_MAX_SIZE:-20m}"
+        max-file: "${APP_LOG_MAX_FILE:-10}"

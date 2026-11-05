@@ -17,6 +17,6 @@ export async function DELETE(
     await revokeAdminInvitation(request.headers, id.data);
     return NextResponse.json({ revoked: true });
   } catch (error) {
-    return apiError(error);
+    return apiError(error, request);
   }
 }

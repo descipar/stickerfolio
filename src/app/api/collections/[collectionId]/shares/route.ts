@@ -36,7 +36,7 @@ export async function GET(
       { headers: privateHeaders },
     );
   } catch (error) {
-    return apiError(error);
+    return apiError(error, request);
   }
 }
 
@@ -80,6 +80,6 @@ export async function POST(
       { status: 201, headers: privateHeaders },
     );
   } catch (error) {
-    return apiError(error);
+    return apiError(error, request);
   }
 }

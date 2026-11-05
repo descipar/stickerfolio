@@ -41,9 +41,9 @@ test.describe("sign in", () => {
     await page.getByLabel("Confirm new password").fill("changed-admin-pass");
     await page.getByRole("button", { name: "Change password" }).click();
 
-    // Changing the temporary password clears the session, so the admin is
-    // returned to the sign-in screen to authenticate with the new password.
-    await page.waitForURL(/\/login$/);
-    await expect(page.getByRole("heading", { name: "Welcome to Stickerfolio" })).toBeVisible();
+    // The password change revokes every other session but keeps this one
+    // (#128), so the now unrestricted admin continues straight to the admin area.
+    await page.waitForURL(/\/admin\/users$/);
+    await expect(page).not.toHaveURL(/\/password\/change$/);
   });
 });

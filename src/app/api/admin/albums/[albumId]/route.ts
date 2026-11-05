@@ -33,6 +33,6 @@ export async function PATCH(
     );
     return NextResponse.json({ updated: true });
   } catch (error) {
-    return apiError(error);
+    return apiError(error, request);
   }
 }

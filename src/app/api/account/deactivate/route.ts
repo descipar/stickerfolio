@@ -21,6 +21,6 @@ export async function POST(request: Request): Promise<NextResponse> {
     await deactivateOwnAccount(request.headers, body.data.currentPassword);
     return NextResponse.json({ deactivated: true });
   } catch (error) {
-    return apiError(error);
+    return apiError(error, request);
   }
 }

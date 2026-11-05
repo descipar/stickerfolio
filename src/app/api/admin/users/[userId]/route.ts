@@ -52,7 +52,7 @@ export async function PATCH(
     }
     return NextResponse.json({ updated: true });
   } catch (error) {
-    return apiError(error);
+    return apiError(error, request);
   }
 }
 
@@ -71,6 +71,6 @@ export async function DELETE(
     await deleteManagedUser(request.headers, userId.data, body.data.confirmationEmail);
     return NextResponse.json({ deleted: true });
   } catch (error) {
-    return apiError(error);
+    return apiError(error, request);
   }
 }

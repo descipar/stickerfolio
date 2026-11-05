@@ -11,7 +11,7 @@ export {
   type IdentityContext,
   type UserRole,
 } from "./profiles";
-export { changeOwnPassword } from "./change-password";
+export { changeOwnPassword, PasswordChangeError } from "./change-password";
 export { changeOwnEmail, EmailChangeError } from "./change-email";
 export {
   AccountLifecycleError,

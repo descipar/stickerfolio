@@ -50,6 +50,6 @@ export async function handleTradeMatchesRequest(
       offset: parsedQuery.data.offset,
     }));
   } catch (error) {
-    return apiError(error);
+    return apiError(error, request);
   }
 }

@@ -29,6 +29,6 @@ export async function PUT(
     );
     return NextResponse.json({ quantity: body.data.quantity });
   } catch (error) {
-    return apiError(error);
+    return apiError(error, request);
   }
 }

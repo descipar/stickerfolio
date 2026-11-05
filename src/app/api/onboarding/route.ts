@@ -19,6 +19,6 @@ export async function POST(request: Request): Promise<NextResponse> {
   try {
     return NextResponse.json(await completeOnboarding(request.headers, body.data), { status: 201 });
   } catch (error) {
-    return apiError(error);
+    return apiError(error, request);
   }
 }

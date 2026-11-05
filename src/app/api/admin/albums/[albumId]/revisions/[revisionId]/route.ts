@@ -26,6 +26,6 @@ export async function PATCH(
     await setAdminRevisionStatus(request.headers, revisionId.data, mutation.data.action);
     return NextResponse.json({ updated: true });
   } catch (error) {
-    return apiError(error);
+    return apiError(error, request);
   }
 }

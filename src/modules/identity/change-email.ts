@@ -1,7 +1,7 @@
 import type { Pool } from "pg";
 
 import { DatabaseError, getPool, query, withTransaction } from "@/infrastructure/database";
-import { writeLog } from "@/infrastructure/observability";
+import { writeAuditEvent } from "@/infrastructure/observability";
 
 import { getAuth, type StickerfolioAuth } from "./auth";
 import { normalizeEmail } from "./email";
@@ -74,7 +74,11 @@ export async function changeOwnEmail(
     throw error;
   }
 
-  // Security-sensitive action audit. The address itself is intentionally not
-  // logged; only the affected user id and the actor are recorded.
-  writeLog("info", "identity.email_changed", { userId: identity.userId, actor: "self" });
+  // The address itself is intentionally not recorded.
+  writeAuditEvent(
+    "account.email_changed",
+    { type: "user", userId: identity.userId },
+    { type: "user", id: identity.userId },
+    { sessionsRevoked: true },
+  );
 }

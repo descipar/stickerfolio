@@ -16,6 +16,6 @@ export async function GET(
   try {
     return NextResponse.json({ stickers: await getOwnCollectionStickers(request.headers, parsed.data) });
   } catch (error) {
-    return apiError(error);
+    return apiError(error, request);
   }
 }

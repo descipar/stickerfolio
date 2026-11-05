@@ -25,7 +25,7 @@ export async function GET(
     const grants = await getOwnComparisonGrants(request.headers, collectionId.data);
     return NextResponse.json({ grants }, { headers: privateHeaders });
   } catch (error) {
-    return apiError(error);
+    return apiError(error, request);
   }
 }
 
@@ -50,6 +50,6 @@ export async function POST(
       { status: 201, headers: privateHeaders },
     );
   } catch (error) {
-    return apiError(error);
+    return apiError(error, request);
   }
 }

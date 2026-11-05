@@ -23,6 +23,6 @@ export async function DELETE(request: Request): Promise<NextResponse> {
     await deleteOwnAccount(request.headers, body.data.currentPassword, body.data.confirmationEmail);
     return NextResponse.json({ deleted: true });
   } catch (error) {
-    return apiError(error);
+    return apiError(error, request);
   }
 }

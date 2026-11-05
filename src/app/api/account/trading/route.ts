@@ -12,7 +12,7 @@ export async function GET(request: Request): Promise<NextResponse> {
   try {
     return NextResponse.json({ visible: await getOwnTradingVisibility(request.headers) });
   } catch (error) {
-    return apiError(error);
+    return apiError(error, request);
   }
 }
 
@@ -25,6 +25,6 @@ export async function PATCH(request: Request): Promise<NextResponse> {
     await setOwnTradingVisibility(request.headers, body.data.visible);
     return NextResponse.json({ visible: body.data.visible });
   } catch (error) {
-    return apiError(error);
+    return apiError(error, request);
   }
 }

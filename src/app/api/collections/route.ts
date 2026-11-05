@@ -12,7 +12,7 @@ export async function GET(request: Request): Promise<NextResponse> {
   try {
     return NextResponse.json(await getCollectionsOverview(request.headers));
   } catch (error) {
-    return apiError(error);
+    return apiError(error, request);
   }
 }
 
@@ -25,6 +25,6 @@ export async function POST(request: Request): Promise<NextResponse> {
     const collection = await addOwnCollection(request.headers, body.data.albumId);
     return NextResponse.json(collection, { status: 201 });
   } catch (error) {
-    return apiError(error);
+    return apiError(error, request);
   }
 }

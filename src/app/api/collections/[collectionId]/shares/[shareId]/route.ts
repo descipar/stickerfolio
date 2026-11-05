@@ -50,7 +50,7 @@ export async function PATCH(
     );
     return NextResponse.json({ share }, { headers: privateHeaders });
   } catch (error) {
-    return apiError(error);
+    return apiError(error, request);
   }
 }
 
@@ -74,6 +74,6 @@ export async function DELETE(
       ? new NextResponse(null, { status: 204, headers: privateHeaders })
       : NextResponse.json({ error: "Share link not found." }, { status: 404 });
   } catch (error) {
-    return apiError(error);
+    return apiError(error, request);
   }
 }

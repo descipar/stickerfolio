@@ -24,6 +24,18 @@ export async function resolveIdentity(
   return identity?.status === "active" ? identity : null;
 }
 
+/** Like {@link requireIdentity}, plus the id of the session that authenticated the request. */
+export async function requireIdentitySession(
+  headers: Headers,
+  auth: StickerfolioAuth = getAuth(),
+  executor?: QueryExecutor,
+): Promise<{ identity: IdentityContext; sessionId: string }> {
+  const session = await auth.api.getSession({ headers });
+  const identity = session ? await getIdentityContext(session.user.id, executor) : null;
+  if (!session || identity?.status !== "active") throw new AuthenticationError("Authentication required.");
+  return { identity, sessionId: session.session.id };
+}
+
 export async function requireIdentity(
   headers: Headers,
   auth?: StickerfolioAuth,

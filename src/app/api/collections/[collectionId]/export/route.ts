@@ -28,6 +28,6 @@ export async function GET(
       },
     });
   } catch (error) {
-    return apiError(error);
+    return apiError(error, request);
   }
 }

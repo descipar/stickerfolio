@@ -43,7 +43,7 @@ export async function handleComparisonSetupRequest(
     const setup = await loadSetup(request.headers, body.data);
     return NextResponse.json({ setup }, { headers: privateHeaders });
   } catch (error) {
-    return apiError(error);
+    return apiError(error, request);
   }
 }
 

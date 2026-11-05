@@ -17,7 +17,7 @@ export async function GET(request: Request): Promise<NextResponse> {
   try {
     return NextResponse.json({ invitations: await listAdminInvitations(request.headers) });
   } catch (error) {
-    return apiError(error);
+    return apiError(error, request);
   }
 }
 
@@ -29,6 +29,6 @@ export async function POST(request: Request): Promise<NextResponse> {
   try {
     return NextResponse.json(await createAdminInvitation(request.headers, body.data), { status: 201 });
   } catch (error) {
-    return apiError(error);
+    return apiError(error, request);
   }
 }

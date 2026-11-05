@@ -1,6 +1,7 @@
 import type { Pool, PoolClient } from "pg";
 
 import { getPool, query, withTransaction } from "@/infrastructure/database";
+import { writeAuditEvent } from "@/infrastructure/observability";
 
 import { getAuth, type StickerfolioAuth } from "./auth";
 import { AuthenticationError, requireIdentity } from "./session";
@@ -302,10 +303,16 @@ export async function exportOwnAccountData(
   exportedAt = new Date(),
 ): Promise<AccountDataExport> {
   const identity = await requireIdentity(headers, auth, pool);
-  return withTransaction(async (client) => {
+  const data = await withTransaction(async (client) => {
     await query("SET TRANSACTION ISOLATION LEVEL REPEATABLE READ READ ONLY", [], client);
     return loadAccountDataExport(client, identity.userId, exportedAt);
   }, pool);
+  writeAuditEvent(
+    "account.exported",
+    { type: "user", userId: identity.userId },
+    { type: "user", id: identity.userId },
+  );
+  return data;
 }
 
 export function accountExportFileName(exportedAt: Date): string {

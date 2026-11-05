@@ -2,10 +2,10 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 
 import { readLimitedJson } from "@/infrastructure/http";
-import { AuthenticationError, changeOwnPassword } from "@/modules/identity";
+import { AuthenticationError, changeOwnPassword, PasswordChangeError } from "@/modules/identity";
 import { maximumPasswordLength, minimumPasswordLength } from "@/shared/password-policy";
 
-import { requestBodyTooLarge } from "../../http";
+import { apiError, requestBodyTooLarge } from "../../http";
 
 const bodySchema = z.object({
   currentPassword: z.string().min(1).max(128),
@@ -29,6 +29,9 @@ export async function POST(request: Request): Promise<NextResponse> {
     if (error instanceof AuthenticationError) {
       return NextResponse.json({ error: "Authentication required." }, { status: error.status });
     }
-    return NextResponse.json({ error: "The password could not be changed." }, { status: 400 });
+    if (error instanceof PasswordChangeError) {
+      return NextResponse.json({ error: "The password could not be changed." }, { status: 400 });
+    }
+    return apiError(error, request);
   }
 }

@@ -18,6 +18,6 @@ export async function GET(request: Request): Promise<NextResponse> {
       },
     });
   } catch (error) {
-    return apiError(error);
+    return apiError(error, request);
   }
 }

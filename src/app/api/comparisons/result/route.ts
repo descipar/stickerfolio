@@ -48,7 +48,7 @@ export async function handleDirectComparisonRequest(
     );
     return NextResponse.json({ result }, { headers: privateHeaders });
   } catch (error) {
-    return apiError(error);
+    return apiError(error, request);
   }
 }
 

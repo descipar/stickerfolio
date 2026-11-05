@@ -20,6 +20,6 @@ export async function PATCH(request: Request): Promise<NextResponse> {
     await changeOwnEmail(request.headers, body.data.email, body.data.currentPassword);
     return NextResponse.json({ updated: true });
   } catch (error) {
-    return apiError(error);
+    return apiError(error, request);
   }
 }

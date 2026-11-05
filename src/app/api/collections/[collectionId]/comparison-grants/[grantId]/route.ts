@@ -28,6 +28,6 @@ export async function DELETE(
       ? new NextResponse(null, { status: 204, headers: privateHeaders })
       : NextResponse.json({ error: "Comparison unavailable." }, { status: 404 });
   } catch (error) {
-    return apiError(error);
+    return apiError(error, request);
   }
 }

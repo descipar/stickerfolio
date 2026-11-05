@@ -1,7 +1,7 @@
 import type { Pool, PoolClient } from "pg";
 
 import { DatabaseError, getPool, query, withTransaction } from "@/infrastructure/database";
-import { writeAuditEvent, writeLog } from "@/infrastructure/observability";
+import { writeAuditEvent } from "@/infrastructure/observability";
 import {
   hashPassword,
   lockAdministratorsForMutation,
@@ -157,11 +157,12 @@ export async function setManagedUserEmail(
     }
     throw error;
   }
-  writeLog("info", "identity.email_changed", {
-    userId,
-    actor: "admin",
-    actorUserId: actor.userId,
-  });
+  writeAuditEvent(
+    "account.email_changed",
+    { type: "user", userId: actor.userId },
+    { type: "user", id: userId },
+    { sessionsRevoked: true },
+  );
 }
 
 interface CreateManagedUserInput {
