@@ -3,6 +3,7 @@ import QRCode from "qrcode";
 import { z } from "zod";
 
 import { getEnvironment } from "@/infrastructure/config";
+import { getAuthenticatedRateLimitKey, InMemoryFixedWindowRateLimiter } from "@/infrastructure/http";
 import {
   createOwnComparisonGrant,
   getOwnComparisonGrants,
@@ -12,6 +13,10 @@ import { apiError } from "../../../http";
 
 const idSchema = z.uuid();
 const privateHeaders = { "Cache-Control": "private, no-store" };
+// #133: at most ten new comparison codes per session and ten minutes.
+const grantCreationLimiter = new InMemoryFixedWindowRateLimiter();
+const grantCreationMaximum = 10;
+const grantCreationWindowMs = 10 * 60_000;
 
 export async function GET(
   request: Request,
@@ -36,6 +41,17 @@ export async function POST(
   const collectionId = idSchema.safeParse((await context.params).collectionId);
   if (!collectionId.success) {
     return NextResponse.json({ error: "Comparison unavailable." }, { status: 404 });
+  }
+  const decision = grantCreationLimiter.consume(
+    `comparison-grant:${getAuthenticatedRateLimitKey(request, getEnvironment().auth.trustedIpHeader)}`,
+    grantCreationMaximum,
+    grantCreationWindowMs,
+  );
+  if (!decision.allowed) {
+    return NextResponse.json(
+      { error: "Too many comparison codes. Please try again later." },
+      { status: 429, headers: { ...privateHeaders, "Retry-After": String(decision.retryAfterSeconds) } },
+    );
   }
   try {
     const created = await createOwnComparisonGrant(request.headers, collectionId.data);

@@ -62,7 +62,11 @@ link when sharing should resume.
 Open a personal album and use **Direct comparison** when meeting another
 collector. Stickerfolio creates a QR link and equivalent manual code that are
 valid for 15 minutes. The other collector must be signed in and own a personal
-collection for the same logical album. A phone's normal camera can scan the QR
+collection for the same logical album. The code works for exactly one other
+collector: the first one who opens it with a compatible album. Anyone else who
+sees the QR code or code later gets "Comparison unavailable". Your list of
+recent codes shows when a code has been used, and you can still revoke it.
+You can create up to ten codes in ten minutes. A phone's normal camera can scan the QR
 code; **Compare** in the main navigation provides the camera-free code-entry
 fallback.
 

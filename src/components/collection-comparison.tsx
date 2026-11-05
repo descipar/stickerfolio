@@ -49,7 +49,7 @@ export function CollectionComparison({ collectionId }: { collectionId: string })
     const data = await response.json() as CreatedComparison;
     setCreated(data);
     setGrants((current) => [data.grant, ...(current ?? [])]);
-    setMessage("Comparison code created. It is valid for 15 minutes.");
+    setMessage("Comparison code created. It is valid for 15 minutes and works for the first collector who opens it.");
     setPending(false);
   }
 
@@ -166,6 +166,11 @@ export function CollectionComparison({ collectionId }: { collectionId: string })
                 Created {new Date(grant.createdAt).toLocaleString()} · expires {new Date(grant.expiresAt).toLocaleString()}
               </span>
               <small className={`status-badge ${grant.status}`}>{grant.status}</small>
+              {grant.redeemedAt ? (
+                <span className="muted">
+                  Used by one collector since {new Date(grant.redeemedAt).toLocaleTimeString()}; no one else can open it.
+                </span>
+              ) : null}
             </div>
             {grant.status === "active" ? (
               <button

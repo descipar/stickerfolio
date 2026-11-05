@@ -75,6 +75,14 @@ compatible collection owned by the signed-in recipient. It never exposes a
 complete shared list and does not depend on either collector's general trading
 visibility preference.
 
+A grant is bound to its first recipient (#133). The first collector who opens
+it with a compatible collection is stored as `recipient_collector_id` by a
+conditional `UPDATE ... WHERE recipient_collector_id IS NULL`, so concurrent
+first redemptions cannot both win. Every later setup or comparison checks that
+the viewer is that recipient. Opening a code without a compatible album does
+not bind it. The owner can still revoke a bound grant, redemption is audited,
+and grant creation is rate-limited per session.
+
 The QR token and manual fallback code are independently generated and stored
 only as SHA-256 hashes. The comparison query joins the two pinned revisions by
 stable sticker identity inside a repeatable-read transaction, derives current

@@ -28,7 +28,8 @@ Trade matching is read-only. It shows an opted-in partner's display name and onl
 
 Direct comparison is a separate explicit flow for two signed-in collectors.
 Scanning a QR code or entering its manual fallback does not opt either person
-into general trade discovery, and the grant expires after 15 minutes.
+into general trade discovery. The grant expires after 15 minutes and is bound to
+the first collector who redeems it.
 
 Stickerfolio currently focuses on collection tracking, controlled list sharing,
 catalog administration, and private trade discovery. It does not provide in-app

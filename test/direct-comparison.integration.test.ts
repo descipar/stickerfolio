@@ -53,6 +53,9 @@ describe("short-lived private direct collection comparisons", () => {
   let ownerHeaders: Headers;
   let viewerHeaders: Headers;
   let outsiderHeaders: Headers;
+  let secondHeaders: Headers;
+  let secondCollectorId: string;
+  let secondCollectionId: string;
   let ownerCollectorId: string;
   let viewerCollectorId: string;
   let ownerCollectionId: string;
@@ -83,6 +86,7 @@ describe("short-lived private direct collection comparisons", () => {
       createManagedUser(adminHeaders, { email: "owner@comparison.test", displayName: "Owner Collector", initialPassword: "Owner-secure-1!", role: "user" }, auth, pool),
       createManagedUser(adminHeaders, { email: "viewer@comparison.test", displayName: "Viewer Collector", initialPassword: "Viewer-secure-1!", role: "user" }, auth, pool),
       createManagedUser(adminHeaders, { email: "outsider@comparison.test", displayName: "Outsider", initialPassword: "Outsider-secure-1!", role: "user" }, auth, pool),
+      createManagedUser(adminHeaders, { email: "second@comparison.test", displayName: "Second Viewer", initialPassword: "Second-secure-1!", role: "user" }, auth, pool),
     ]);
     await query(`UPDATE "user" SET "mustChangePassword" = false WHERE id = ANY($1::uuid[])`, [users.map((user) => user.id)], pool);
     const profiles = await query<{ id: string; user_id: string }>(
@@ -94,6 +98,8 @@ describe("short-lived private direct collection comparisons", () => {
     ownerCollectorId = profileFor(users[0]!.id);
     viewerCollectorId = profileFor(users[1]!.id);
     const outsiderCollectorId = profileFor(users[2]!.id);
+    secondCollectorId = profileFor(users[3]!.id);
+    secondHeaders = await signIn("second@comparison.test", "Second-secure-1!");
     ownerHeaders = await signIn("owner@comparison.test", "Owner-secure-1!");
     viewerHeaders = await signIn("viewer@comparison.test", "Viewer-secure-1!");
     outsiderHeaders = await signIn("outsider@comparison.test", "Outsider-secure-1!");
@@ -115,6 +121,7 @@ describe("short-lived private direct collection comparisons", () => {
       ],
     }, pool);
     viewerCollectionId = (await createCollection(viewerCollectorId, albumId, pool)).id;
+    secondCollectionId = (await createCollection(secondCollectorId, albumId, pool)).id;
     await setHoldingQuantity(viewerCollectorId, viewerCollectionId, stickerTwo, 2, pool);
     await setHoldingQuantity(viewerCollectorId, viewerCollectionId, stickerThree, 1, pool);
 
@@ -234,5 +241,74 @@ describe("short-lived private direct collection comparisons", () => {
     await expect(revokeOwnComparisonGrant(ownerHeaders, ownerCollectionId, grantId, auth, pool)).resolves.toBe(true);
     await expect(getOwnComparisonSetup(viewerHeaders, { token }, auth, pool)).rejects.toBeInstanceOf(DirectComparisonError);
     await expect(getOwnComparisonSetup(viewerHeaders, { token: "A".repeat(43) }, auth, pool)).rejects.toBeInstanceOf(DirectComparisonError);
+  });
+
+  it("binds a grant to the first compatible recipient and audits that redemption once (#133)", async () => {
+    const created = await createOwnComparisonGrant(ownerHeaders, ownerCollectionId, auth, pool);
+    const output = vi.spyOn(console, "log").mockImplementation(() => undefined);
+
+    // Opening the code without a compatible album does not consume it.
+    await expect(getOwnComparisonSetup(outsiderHeaders, { token: created.token }, auth, pool))
+      .rejects.toBeInstanceOf(DirectComparisonError);
+    const unbound = (await getOwnComparisonGrants(ownerHeaders, ownerCollectionId, auth, pool))
+      .find((grant) => grant.id === created.grant.id);
+    expect(unbound?.redeemedAt).toBeNull();
+
+    await expect(getOwnComparisonSetup(viewerHeaders, { code: created.code }, auth, pool))
+      .resolves.toMatchObject({ collections: [{ id: viewerCollectionId }] });
+    await expect(getOwnDirectComparison(viewerHeaders, viewerCollectionId, { token: created.token }, auth, pool))
+      .resolves.toMatchObject({ partnerDisplayName: "Owner Collector" });
+
+    await expect(getOwnComparisonSetup(secondHeaders, { token: created.token }, auth, pool))
+      .rejects.toBeInstanceOf(DirectComparisonError);
+    await expect(getOwnDirectComparison(secondHeaders, secondCollectionId, { code: created.code }, auth, pool))
+      .rejects.toBeInstanceOf(DirectComparisonError);
+
+    const events = output.mock.calls
+      .map(([line]) => JSON.parse(String(line)) as { event: string; audit?: { action: string; targetId: string } })
+      .filter((entry) => entry.event === "security.audit")
+      .map((entry) => entry.audit);
+    expect(events).toEqual([
+      expect.objectContaining({ action: "comparison_grant.redeemed", targetId: created.grant.id }),
+    ]);
+    output.mockRestore();
+
+    const bound = (await getOwnComparisonGrants(ownerHeaders, ownerCollectionId, auth, pool))
+      .find((grant) => grant.id === created.grant.id);
+    expect(bound).toMatchObject({ status: "active", redeemedAt: expect.any(String) });
+    const stored = await query<{ recipient_collector_id: string }>(
+      "SELECT recipient_collector_id FROM collection_comparison_grants WHERE id = $1",
+      [created.grant.id],
+      pool,
+    );
+    expect(stored.rows[0]?.recipient_collector_id).toBe(viewerCollectorId);
+  });
+
+  it("lets exactly one of two concurrent first redemptions win", async () => {
+    vi.spyOn(console, "log").mockImplementation(() => undefined);
+    const created = await createOwnComparisonGrant(ownerHeaders, ownerCollectionId, auth, pool);
+    const results = await Promise.all([
+      prepareDirectComparison(viewerCollectorId, { token: created.token }, pool),
+      prepareDirectComparison(secondCollectorId, { token: created.token }, pool),
+    ]);
+    expect(results.filter((result) => result !== null)).toHaveLength(1);
+    vi.restoreAllMocks();
+  });
+
+  it("stops a bound grant on revocation and expiry", async () => {
+    vi.spyOn(console, "log").mockImplementation(() => undefined);
+    const created = await createOwnComparisonGrant(ownerHeaders, ownerCollectionId, auth, pool);
+    await expect(prepareDirectComparison(viewerCollectorId, { token: created.token }, pool)).resolves.not.toBeNull();
+
+    const afterExpiry = new Date(Date.now() + 16 * 60 * 1000);
+    await expect(prepareDirectComparison(viewerCollectorId, { token: created.token }, pool, afterExpiry)).resolves.toBeNull();
+    await expect(
+      calculateDirectComparison(viewerCollectorId, viewerCollectionId, { token: created.token }, pool, afterExpiry),
+    ).resolves.toBeNull();
+
+    await expect(revokeOwnComparisonGrant(ownerHeaders, ownerCollectionId, created.grant.id, auth, pool)).resolves.toBe(true);
+    await expect(getOwnDirectComparison(viewerHeaders, viewerCollectionId, { token: created.token }, auth, pool))
+      .rejects.toBeInstanceOf(DirectComparisonError);
+    vi.restoreAllMocks();
   });
 });

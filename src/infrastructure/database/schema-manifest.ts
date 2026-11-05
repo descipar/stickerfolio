@@ -13,6 +13,7 @@ export const expectedMigrations = [
   "000007_collection_share_links",
   "000008_collection_comparison_grants",
   "000009_active_collector_profiles",
+  "000010_comparison_grant_recipient",
 ] as const;
 
 export const expectedSchemaVersion: string = expectedMigrations[expectedMigrations.length - 1];
