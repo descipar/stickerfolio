@@ -55,6 +55,10 @@ const metrics = {
 };
 
 export const options = {
+  // Each VU signs in once and reuses its session across iterations (and
+  // re-authenticates on its own schedule); k6 would otherwise clear the cookie
+  // jar after every iteration and later requests would run unauthenticated.
+  noCookiesReset: true,
   scenarios: {
     concurrent_collectors: {
       executor: 'constant-vus',

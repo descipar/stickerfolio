@@ -1,6 +1,6 @@
 import type { Pool } from "pg";
 
-import { getPool, query, type QueryExecutor } from "@/infrastructure/database";
+import { getPool, query, withTransaction, type QueryExecutor } from "@/infrastructure/database";
 import { requireCollectorContext } from "@/modules/collectors";
 
 export type TradeDirection = "all" | "one-way" | "two-way";
@@ -57,10 +57,16 @@ export interface TradeMatchResult {
   offset: number;
 }
 
-interface MatchRow {
+interface PartnerSummaryRow {
   partner_collector_id: string;
   display_name: string;
-  sticker_id: string;
+  offered_count: number;
+  wanted_count: number;
+  total: number;
+}
+
+interface DetailRow {
+  partner_collector_id: string;
   owner_code: string;
   partner_code: string;
   owner_label: string;
@@ -69,45 +75,152 @@ interface MatchRow {
   section_name: string;
   owner_quantity: number;
   partner_quantity: number;
-  owner_sort_order: number;
 }
 
-interface InternalMatch extends TradeMatch {
-  partnerCollectorId: string;
+// Display names are ordered with the ICU root collation so the result matches
+// the previous `localeCompare(..., "en")` ordering regardless of the database's
+// libc locale (musl-based images sort bytewise). PostgreSQL 16+ ships ICU.
+const nameOrder = `display_name COLLATE "und-x-icu", partner_collector_id`;
+
+// Whitelisted ORDER BY clauses; never interpolate caller input.
+const sortClauses: Record<TradeSort, string> = {
+  compatibility: `(offered_count > 0 AND wanted_count > 0) DESC,
+                  LEAST(offered_count, wanted_count) DESC,
+                  offered_count + wanted_count DESC, ${nameOrder}`,
+  offered: `offered_count DESC, ${nameOrder}`,
+  wanted: `wanted_count DESC, ${nameOrder}`,
+  name: nameOrder,
+};
+
+// Stickers of the owner's revision that can take part in a trade: missing
+// (no holding row) or held as a duplicate. Shared by both queries so summary
+// counts and detail lines always agree.
+const ownerCandidatesCte = `
+  owner_collection AS (
+    SELECT c.id, c.collector_id, c.album_id, c.revision_id
+      FROM collections c
+     WHERE c.id = $1 AND c.collector_id = $2 AND c.status = 'active'
+  ),
+  owner_candidates AS (
+    SELECT owner_sticker.sticker_id,
+           owner_sticker.code,
+           owner_sticker.label,
+           owner_sticker.section_id,
+           owner_sticker.sort_order,
+           COALESCE(owner_holding.quantity, 0)::integer AS quantity
+      FROM owner_collection owner
+      JOIN album_revision_stickers owner_sticker
+        ON owner_sticker.revision_id = owner.revision_id
+      LEFT JOIN holdings owner_holding
+        ON owner_holding.collection_id = owner.id
+       AND owner_holding.sticker_id = owner_sticker.sticker_id
+     WHERE ($3::uuid IS NULL OR owner_sticker.section_id = $3)
+       AND (owner_holding.sticker_id IS NULL OR owner_holding.quantity > 1)
+  ),
+  visible_partners AS (
+    SELECT partner.id, partner.collector_id, partner.revision_id
+      FROM owner_collection owner
+      JOIN collections partner
+        ON partner.album_id = owner.album_id
+       AND partner.collector_id <> owner.collector_id
+       AND partner.status = 'active'
+      JOIN trading_preferences partner_preference
+        ON partner_preference.collector_id = partner.collector_id
+       AND partner_preference.visible
+  )`;
+
+// Joins a candidate sticker to each visible partner's revision via the stable
+// sticker ID. Combined with `exchangeRelevant`, only pairs where one side is
+// missing the sticker and the other holds a spare copy remain.
+const exchangeJoin = `
+      FROM visible_partners partner
+      JOIN album_revision_stickers partner_sticker
+        ON partner_sticker.revision_id = partner.revision_id
+      JOIN owner_candidates candidate
+        ON candidate.sticker_id = partner_sticker.sticker_id
+      LEFT JOIN holdings partner_holding
+        ON partner_holding.collection_id = partner.id
+       AND partner_holding.sticker_id = partner_sticker.sticker_id`;
+
+const exchangeRelevant = `
+      ((candidate.quantity = 0 AND partner_holding.quantity > 1)
+        OR (candidate.quantity > 1 AND partner_holding.sticker_id IS NULL))`;
+
+// Per-partner counts without building partner × sticker pairs:
+// - offered: the partner's spare copies of stickers the owner is missing,
+//   found through holdings(sticker_id, quantity);
+// - wanted: the owner's duplicate stickers that exist in the partner's
+//   revision, minus those the partner already holds. Holdings always reference
+//   a sticker of the collection's own revision, so the subtraction is exact.
+function summarySql(sort: TradeSort): string {
+  return `
+    WITH ${ownerCandidatesCte},
+    offer_counts AS (
+      SELECT partner_holding.collection_id, count(*)::integer AS offered_count
+        FROM owner_candidates candidate
+        JOIN holdings partner_holding
+          ON partner_holding.sticker_id = candidate.sticker_id
+         AND partner_holding.quantity > 1
+       WHERE candidate.quantity = 0
+       GROUP BY partner_holding.collection_id
+    ),
+    wanted_per_revision AS (
+      SELECT partner_sticker.revision_id, count(*)::integer AS available_count
+        FROM owner_candidates candidate
+        JOIN album_revision_stickers partner_sticker
+          ON partner_sticker.sticker_id = candidate.sticker_id
+       WHERE candidate.quantity > 1
+       GROUP BY partner_sticker.revision_id
+    ),
+    wanted_already_held AS (
+      SELECT partner_holding.collection_id, count(*)::integer AS held_count
+        FROM owner_candidates candidate
+        JOIN holdings partner_holding ON partner_holding.sticker_id = candidate.sticker_id
+       WHERE candidate.quantity > 1
+       GROUP BY partner_holding.collection_id
+    ),
+    partner_counts AS (
+      SELECT partner.collector_id AS partner_collector_id,
+             COALESCE(offers.offered_count, 0) AS offered_count,
+             COALESCE(revision_wants.available_count, 0)
+               - COALESCE(held.held_count, 0) AS wanted_count
+        FROM visible_partners partner
+        LEFT JOIN offer_counts offers ON offers.collection_id = partner.id
+        LEFT JOIN wanted_per_revision revision_wants ON revision_wants.revision_id = partner.revision_id
+        LEFT JOIN wanted_already_held held ON held.collection_id = partner.id
+    ),
+    filtered AS (
+      SELECT counts.*, profile.display_name
+        FROM partner_counts counts
+        JOIN collector_profiles profile ON profile.id = counts.partner_collector_id
+       WHERE (counts.offered_count > 0 OR counts.wanted_count > 0)
+         AND ($4::text = 'all'
+          OR ($4::text = 'two-way') = (counts.offered_count > 0 AND counts.wanted_count > 0))
+    )
+    SELECT partner_collector_id, display_name, offered_count, wanted_count,
+           count(*) OVER ()::integer AS total
+      FROM filtered
+     ORDER BY ${sortClauses[sort]}
+     LIMIT $5 OFFSET $6`;
 }
 
-function sortMatches(matches: InternalMatch[], sort: TradeSort): void {
-  matches.sort((left, right) => {
-    if (sort === "compatibility") {
-      const kind = Number(right.kind === "two-way") - Number(left.kind === "two-way");
-      if (kind !== 0) return kind;
-      const balanced = Math.min(right.offeredCount, right.wantedCount)
-        - Math.min(left.offeredCount, left.wantedCount);
-      if (balanced !== 0) return balanced;
-      const total = right.offeredCount + right.wantedCount - left.offeredCount - left.wantedCount;
-      if (total !== 0) return total;
-    } else if (sort === "offered") {
-      const offered = right.offeredCount - left.offeredCount;
-      if (offered !== 0) return offered;
-    } else if (sort === "wanted") {
-      const wanted = right.wantedCount - left.wantedCount;
-      if (wanted !== 0) return wanted;
-    }
-    const name = left.displayName.localeCompare(right.displayName, "en");
-    return name || left.partnerCollectorId.localeCompare(right.partnerCollectorId);
-  });
-}
-
-function toPublicMatch(match: InternalMatch): TradeMatch {
-  return {
-    displayName: match.displayName,
-    kind: match.kind,
-    offersToYou: match.offersToYou,
-    needsFromYou: match.needsFromYou,
-    offeredCount: match.offeredCount,
-    wantedCount: match.wantedCount,
-  };
-}
+// Sticker lines for the partners on the requested page only ($4).
+const detailSql = `
+  WITH ${ownerCandidatesCte}
+  SELECT partner.collector_id AS partner_collector_id,
+         candidate.code AS owner_code,
+         partner_sticker.code AS partner_code,
+         candidate.label AS owner_label,
+         section.id AS section_id,
+         section.code AS section_code,
+         section.name AS section_name,
+         candidate.quantity AS owner_quantity,
+         COALESCE(partner_holding.quantity, 0)::integer AS partner_quantity
+    ${exchangeJoin}
+    JOIN album_sections section ON section.id = candidate.section_id
+   WHERE partner.collector_id = ANY($4::uuid[])
+     AND ${exchangeRelevant}
+   ORDER BY partner.collector_id, candidate.sort_order, candidate.sticker_id`;
 
 export async function calculateTradeMatches(
   collectorId: string,
@@ -119,6 +232,7 @@ export async function calculateTradeMatches(
   const sort = options.sort ?? "compatibility";
   const limit = Math.min(50, Math.max(1, options.limit ?? 20));
   const offset = Math.max(0, options.offset ?? 0);
+  const sectionId = options.sectionId ?? null;
 
   const owner = await query<{ album_title: string; visible: boolean }>(
     `SELECT a.title AS album_title, COALESCE(tp.visible, false) AS visible
@@ -150,87 +264,58 @@ export async function calculateTradeMatches(
   };
   if (!ownerCollection.visible) return { ...baseResult, matches: [], total: 0 };
 
-  const rows = await query<MatchRow>(
-    `SELECT partner.collector_id AS partner_collector_id,
-            profile.display_name,
-            owner_sticker.sticker_id,
-            owner_sticker.code AS owner_code,
-            partner_sticker.code AS partner_code,
-            owner_sticker.label AS owner_label,
-            section.id AS section_id,
-            section.code AS section_code,
-            section.name AS section_name,
-            COALESCE(owner_holding.quantity, 0)::integer AS owner_quantity,
-            COALESCE(partner_holding.quantity, 0)::integer AS partner_quantity,
-            owner_sticker.sort_order AS owner_sort_order
-       FROM collections owner
-       JOIN collections partner
-         ON partner.album_id = owner.album_id
-        AND partner.collector_id <> owner.collector_id
-        AND partner.status = 'active'
-       JOIN trading_preferences partner_preference
-         ON partner_preference.collector_id = partner.collector_id
-        AND partner_preference.visible
-       JOIN collector_profiles profile ON profile.id = partner.collector_id
-       JOIN album_revision_stickers owner_sticker
-         ON owner_sticker.revision_id = owner.revision_id
-       JOIN album_revision_stickers partner_sticker
-         ON partner_sticker.revision_id = partner.revision_id
-        AND partner_sticker.sticker_id = owner_sticker.sticker_id
-       JOIN album_sections section ON section.id = owner_sticker.section_id
-       LEFT JOIN holdings owner_holding
-         ON owner_holding.collection_id = owner.id
-        AND owner_holding.sticker_id = owner_sticker.sticker_id
-       LEFT JOIN holdings partner_holding
-         ON partner_holding.collection_id = partner.id
-        AND partner_holding.sticker_id = partner_sticker.sticker_id
-      WHERE owner.id = $1
-        AND owner.collector_id = $2
-        AND owner.status = 'active'
-        AND ($3::uuid IS NULL OR owner_sticker.section_id = $3)
-        AND ((owner_holding.sticker_id IS NULL AND partner_holding.quantity > 1)
-          OR (owner_holding.quantity > 1 AND partner_holding.sticker_id IS NULL))
-      ORDER BY profile.display_name, partner.collector_id, owner_sticker.sort_order, owner_sticker.sticker_id`,
-    [collectionId, collectorId, options.sectionId ?? null],
+  const summaryParams = [collectionId, collectorId, sectionId, direction];
+  const summary = await query<PartnerSummaryRow>(
+    summarySql(sort),
+    [...summaryParams, limit, offset],
     executor,
   );
+  let total = summary.rows[0]?.total ?? 0;
+  if (summary.rows.length === 0 && offset > 0) {
+    // A page past the end carries no window count; fetch the total cheaply.
+    const count = await query<PartnerSummaryRow>(summarySql("name"), [...summaryParams, 1, 0], executor);
+    total = count.rows[0]?.total ?? 0;
+  }
+  if (summary.rows.length === 0) return { ...baseResult, matches: [], total };
 
-  const grouped = new Map<string, InternalMatch>();
-  for (const row of rows.rows) {
-    const match = grouped.get(row.partner_collector_id) ?? {
-      partnerCollectorId: row.partner_collector_id,
-      displayName: row.display_name,
-      kind: "one-way" as const,
-      offersToYou: [],
-      needsFromYou: [],
-      offeredCount: 0,
-      wantedCount: 0,
-    };
+  const partnerIds = summary.rows.map((row) => row.partner_collector_id);
+  const details = await query<DetailRow>(
+    detailSql,
+    [collectionId, collectorId, sectionId, partnerIds],
+    executor,
+  );
+  const stickersByPartner = new Map<string, Pick<TradeMatch, "offersToYou" | "needsFromYou">>(
+    partnerIds.map((id) => [id, { offersToYou: [], needsFromYou: [] }]),
+  );
+  for (const row of details.rows) {
+    const group = stickersByPartner.get(row.partner_collector_id);
+    if (!group) continue;
     const common = {
       code: row.owner_code,
       partnerCode: row.partner_code,
       label: row.owner_label,
       section: { id: row.section_id, code: row.section_code, name: row.section_name },
     };
-    if (row.owner_quantity === 0 && row.partner_quantity > 1) {
-      match.offersToYou.push({ ...common, spareCount: row.partner_quantity - 1 });
-    } else if (row.owner_quantity > 1 && row.partner_quantity === 0) {
-      match.needsFromYou.push({ ...common, spareCount: row.owner_quantity - 1 });
+    if (row.owner_quantity === 0) {
+      group.offersToYou.push({ ...common, spareCount: row.partner_quantity - 1 });
+    } else {
+      group.needsFromYou.push({ ...common, spareCount: row.owner_quantity - 1 });
     }
-    match.offeredCount = match.offersToYou.length;
-    match.wantedCount = match.needsFromYou.length;
-    match.kind = match.offeredCount > 0 && match.wantedCount > 0 ? "two-way" : "one-way";
-    grouped.set(row.partner_collector_id, match);
   }
 
-  const matches = [...grouped.values()].filter((match) =>
-    direction === "all" || match.kind === direction,
-  );
-  sortMatches(matches, sort);
-  const total = matches.length;
   return {
     ...baseResult,
-    matches: matches.slice(offset, offset + limit).map(toPublicMatch),
+    matches: summary.rows.map((row): TradeMatch => {
+      const stickers = stickersByPartner.get(row.partner_collector_id)!;
+      return {
+        displayName: row.display_name,
+        kind: row.offered_count > 0 && row.wanted_count > 0 ? "two-way" : "one-way",
+        offersToYou: stickers.offersToYou,
+        needsFromYou: stickers.needsFromYou,
+        offeredCount: row.offered_count,
+        wantedCount: row.wanted_count,
+      };
+    }),
     total,
   };
 }
@@ -245,5 +330,10 @@ export async function getOwnTradeMatches(
   pool: Pool = getPool(),
 ): Promise<TradeMatchResult> {
   const identity = await requireCollectorContext(headers, auth, pool);
-  return calculateTradeMatches(identity.collector.id, collectionId, options, pool);
+  // Summary counts and page details are separate statements; one read-only
+  // snapshot keeps them consistent under concurrent holding updates.
+  return withTransaction(async (client) => {
+    await query("SET TRANSACTION ISOLATION LEVEL REPEATABLE READ READ ONLY", [], client);
+    return calculateTradeMatches(identity.collector.id, collectionId, options, client);
+  }, pool);
 }

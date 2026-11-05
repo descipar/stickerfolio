@@ -59,48 +59,12 @@ SELECT rs.code, rs.label, s.code AS section_code, s.name AS section_name,
    AND c.status = 'active' AND h.quantity > 1
  ORDER BY s.sort_order, rs.sort_order, rs.code;
 
--- 3) TRADE MATCHING (target p95 < 1 s). Owner collection vs. every other active,
---    trading-visible collection for the same album; keeps rows where one side is
---    missing a sticker the other holds as a duplicate. Indexes of interest:
---    collections_trade_candidates_idx (album_id, collector_id, revision_id) WHERE
---    status='active', trading_preferences_visible_idx, holdings PK.
-EXPLAIN (ANALYZE, BUFFERS, VERBOSE)
-SELECT partner.collector_id AS partner_collector_id,
-       profile.display_name,
-       owner_sticker.sticker_id,
-       owner_sticker.code AS owner_code,
-       partner_sticker.code AS partner_code,
-       owner_sticker.label AS owner_label,
-       section.id AS section_id,
-       section.code AS section_code,
-       section.name AS section_name,
-       COALESCE(owner_holding.quantity, 0)::integer AS owner_quantity,
-       COALESCE(partner_holding.quantity, 0)::integer AS partner_quantity,
-       owner_sticker.sort_order AS owner_sort_order
-  FROM collections owner
-  JOIN collections partner
-    ON partner.album_id = owner.album_id
-   AND partner.collector_id <> owner.collector_id
-   AND partner.status = 'active'
-  JOIN trading_preferences partner_preference
-    ON partner_preference.collector_id = partner.collector_id
-   AND partner_preference.visible
-  JOIN collector_profiles profile ON profile.id = partner.collector_id
-  JOIN album_revision_stickers owner_sticker
-    ON owner_sticker.revision_id = owner.revision_id
-  JOIN album_revision_stickers partner_sticker
-    ON partner_sticker.revision_id = partner.revision_id
-   AND partner_sticker.sticker_id = owner_sticker.sticker_id
-  JOIN album_sections section ON section.id = owner_sticker.section_id
-  LEFT JOIN holdings owner_holding
-    ON owner_holding.collection_id = owner.id
-   AND owner_holding.sticker_id = owner_sticker.sticker_id
-  LEFT JOIN holdings partner_holding
-    ON partner_holding.collection_id = partner.id
-   AND partner_holding.sticker_id = partner_sticker.sticker_id
- WHERE owner.id = :'collection_id'
-   AND owner.collector_id = :'collector_id'
-   AND owner.status = 'active'
-   AND ((owner_holding.sticker_id IS NULL AND partner_holding.quantity > 1)
-     OR (owner_holding.quantity > 1 AND partner_holding.sticker_id IS NULL))
- ORDER BY profile.display_name, partner.collector_id, owner_sticker.sort_order, owner_sticker.sticker_id;
+-- 3) TRADE MATCHING (target p95 < 1 s) is no longer a single statement. Since
+--    #117 the trading module aggregates, filters, sorts, and paginates partner
+--    summaries in PostgreSQL and then loads sticker lines for the requested page
+--    only. To avoid a drifting copy of that SQL, explain the statements the
+--    application really executes with:
+--
+--      DATABASE_URL=... pnpm loadtest:explain
+--
+--    load-test/results/trade-matching.md compares it with the previous query.

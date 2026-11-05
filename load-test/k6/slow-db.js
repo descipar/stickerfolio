@@ -52,6 +52,10 @@ const recoveryChecks = new Counter('recovery_checks');
 const recoveryFailures = new Counter('recovery_failures');
 
 export const options = {
+  // Each VU signs in once and reuses its session across iterations (and
+  // re-authenticates on its own schedule); k6 would otherwise clear the cookie
+  // jar after every iteration and later requests would run unauthenticated.
+  noCookiesReset: true,
   scenarios: {
     resilience_probe: {
       executor: 'constant-vus',

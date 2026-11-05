@@ -1,5 +1,5 @@
 /**
- * Runs EXPLAIN (ANALYZE, BUFFERS, VERBOSE) on the three latency-critical
+ * Runs EXPLAIN (ANALYZE, BUFFERS, VERBOSE) on the latency-critical
  * Stickerfolio queries against DATABASE_URL and prints the plans (Roadmap
  * 12.2/12.3, issue #43). The SQL mirrors the repository/matching queries; it is
  * kept here (rather than importing private SQL) purely so the plans stay
@@ -11,7 +11,8 @@
 import { appendFileSync, mkdirSync, writeFileSync } from "node:fs";
 import path from "node:path";
 
-import { closeDatabasePool, getPool, query } from "@/infrastructure/database";
+import { closeDatabasePool, getPool, query, type QueryExecutor } from "@/infrastructure/database";
+import { calculateTradeMatches } from "@/modules/trading";
 
 const ALBUM_VIEW = `
 SELECT rs.sticker_id AS id, rs.code, rs.label, rs.section_id,
@@ -42,36 +43,6 @@ SELECT rs.code, rs.label, s.code AS section_code, s.name AS section_name,
   LEFT JOIN holdings h ON h.collection_id = c.id AND h.sticker_id = rs.sticker_id
  WHERE c.id = $1 AND c.collector_id = $2 AND c.status = 'active' AND h.quantity > 1
  ORDER BY s.sort_order, rs.sort_order, rs.code`;
-
-const TRADE_MATCHING = `
-SELECT partner.collector_id AS partner_collector_id, profile.display_name,
-       owner_sticker.sticker_id, owner_sticker.code AS owner_code,
-       partner_sticker.code AS partner_code, owner_sticker.label AS owner_label,
-       section.id AS section_id, section.code AS section_code, section.name AS section_name,
-       COALESCE(owner_holding.quantity, 0)::integer AS owner_quantity,
-       COALESCE(partner_holding.quantity, 0)::integer AS partner_quantity,
-       owner_sticker.sort_order AS owner_sort_order
-  FROM collections owner
-  JOIN collections partner
-    ON partner.album_id = owner.album_id AND partner.collector_id <> owner.collector_id
-   AND partner.status = 'active'
-  JOIN trading_preferences partner_preference
-    ON partner_preference.collector_id = partner.collector_id AND partner_preference.visible
-  JOIN collector_profiles profile ON profile.id = partner.collector_id
-  JOIN album_revision_stickers owner_sticker ON owner_sticker.revision_id = owner.revision_id
-  JOIN album_revision_stickers partner_sticker
-    ON partner_sticker.revision_id = partner.revision_id
-   AND partner_sticker.sticker_id = owner_sticker.sticker_id
-  JOIN album_sections section ON section.id = owner_sticker.section_id
-  LEFT JOIN holdings owner_holding
-    ON owner_holding.collection_id = owner.id AND owner_holding.sticker_id = owner_sticker.sticker_id
-  LEFT JOIN holdings partner_holding
-    ON partner_holding.collection_id = partner.id AND partner_holding.sticker_id = partner_sticker.sticker_id
- WHERE owner.id = $1 AND owner.collector_id = $2 AND owner.status = 'active'
-   AND (($3::uuid IS NULL) OR owner_sticker.section_id = $3)
-   AND ((owner_holding.sticker_id IS NULL AND partner_holding.quantity > 1)
-     OR (owner_holding.quantity > 1 AND partner_holding.sticker_id IS NULL))
- ORDER BY profile.display_name, partner.collector_id, owner_sticker.sort_order, owner_sticker.sticker_id`;
 
 const cases: { name: string; sql: string; params: unknown[] }[] = [];
 
@@ -109,11 +80,6 @@ async function main(): Promise<void> {
     { name: "1) Album view (target p95 < 400 ms)", sql: ALBUM_VIEW, params: [chosen.collection_id, chosen.collector_id] },
     { name: "1b) Missing anti-join", sql: MISSING, params: [chosen.collection_id, chosen.collector_id] },
     { name: "2) Duplicates (quantity > 1)", sql: DUPLICATES, params: [chosen.collection_id, chosen.collector_id] },
-    {
-      name: "3) Trade matching (target p95 < 1 s)",
-      sql: TRADE_MATCHING,
-      params: [chosen.collection_id, chosen.collector_id, null],
-    },
   );
 
   emit(`# EXPLAIN ANALYZE — Stickerfolio critical queries`);
@@ -133,6 +99,32 @@ async function main(): Promise<void> {
       pool,
     );
     for (const row of plan.rows) emit(row["QUERY PLAN"]);
+    emit("");
+  }
+
+  // Trade matching (#117) runs several statements built inside the trading
+  // module. Explain exactly what the application executes for the first page
+  // instead of keeping a copy of the SQL here.
+  const tradePlans: { sql: string; plan: string[] }[] = [];
+  const explaining: QueryExecutor = {
+    query: (async (text: string, values?: unknown[]) => {
+      if (text.includes("visible_partners")) {
+        const plan = await pool.query<{ "QUERY PLAN": string }>(
+          `EXPLAIN (ANALYZE, BUFFERS, VERBOSE) ${text}`,
+          values,
+        );
+        tradePlans.push({ sql: text, plan: plan.rows.map((row) => row["QUERY PLAN"]) });
+      }
+      return pool.query(text, values);
+    }) as QueryExecutor["query"],
+  };
+  await calculateTradeMatches(chosen.collector_id, chosen.collection_id, { limit: 20 }, explaining);
+  const labels = ["3) Trade matching: partner summary page (target p95 < 1 s)", "3b) Trade matching: sticker lines for that page"];
+  for (const [index, tradePlan] of tradePlans.entries()) {
+    emit(`==================================================================`);
+    emit(labels[index] ?? `3${index}) Trade matching`);
+    emit(`==================================================================`);
+    for (const line of tradePlan.plan) emit(line);
     emit("");
   }
 }

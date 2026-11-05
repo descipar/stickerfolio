@@ -225,10 +225,13 @@ queries for direct use in `psql`. Notes from the captured run:
 
 - Album view and the missing anti-join resolve via the collection-scoped
   `holdings_pkey` and the `album_revision_stickers` indexes.
-- Trade matching uses `collections_trade_candidates_idx`
-  `(album_id, collector_id, revision_id) WHERE status='active'` and
-  `trading_preferences_visible_idx`, joining owner stickers to every visible
-  partner's holdings.
+- Trade matching was captured before #117 joined owner stickers to every visible
+  partner's holdings. Since #117, `pnpm loadtest:explain` explains the
+  statements the application actually runs: a partner-summary page aggregated
+  in PostgreSQL and the sticker lines for that page. To compare both
+  implementations at 50, 500 and 2,000 collectors, run
+  `pnpm exec tsx load-test/scripts/bench-trade-matching.ts` against a
+  disposable database. Results are in `results/trade-matching.md`.
 - The duplicates query is collection-scoped and filters `quantity > 1` on
   `holdings_pkey` rather than the wider `holdings_sticker_quantity_idx`. Roadmap
   12.2 anticipates a narrow partial index for `quantity > 1`; the exact index
