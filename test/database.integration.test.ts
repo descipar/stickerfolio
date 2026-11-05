@@ -70,7 +70,7 @@ describe("PostgreSQL persistence", () => {
 
     expect(status).toEqual({
       status: "ready",
-      app: "2.0.0-alpha.0",
+      app: "2.0.0-rc.1",
       schema: "000008_collection_comparison_grants",
     });
   });
