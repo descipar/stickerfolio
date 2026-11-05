@@ -51,7 +51,9 @@ jobs:
             }
           '
       - name: Run the one-command first start
-        run: ./start.sh
+        run: |
+          ./start.sh | tee /tmp/first-start.log
+          grep --quiet 'Password: admin123!' /tmp/first-start.log
       - name: Verify application readiness and empty catalog availability
         run: |
           curl --fail --silent http://localhost:3500/api/health/ready
@@ -71,6 +73,16 @@ jobs:
           printf 'Standalone runtime: %s bytes; operations image: %s bytes\n' "$app_size" "$operations_size"
       - name: Verify persistent data survives an app rebuild
         run: docker compose up -d --build app
+      - name: Verify an update run does not print the bootstrap login
+        run: |
+          docker compose exec -T postgres psql --username stickerfolio --dbname stickerfolio \
+            --command "UPDATE \"user\" SET \"mustChangePassword\" = false WHERE email = 'admin@stickerfolio.local'"
+          ./start.sh | tee /tmp/update-start.log
+          if grep --quiet 'admin123!' /tmp/update-start.log; then
+            echo 'An update run printed the bootstrap login.' >&2
+            exit 1
+          fi
+          grep --quiet 'existing installation was updated' /tmp/update-start.log
       - name: Back up and restore into an empty database
         run: |
           ./scripts/postgres-backup.sh --compose /tmp/stickerfolio.dump
