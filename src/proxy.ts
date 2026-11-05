@@ -8,7 +8,6 @@ import {
   untrustedIpSinkHeader,
 } from "@/infrastructure/http";
 
-const invitationRedemptionLimiter = new InMemoryFixedWindowRateLimiter();
 const publicShareLimiter = new InMemoryFixedWindowRateLimiter();
 
 export function proxy(request: Request): Response {
@@ -33,23 +32,6 @@ export function proxy(request: Request): Response {
           "Retry-After": String(decision.retryAfterSeconds),
         },
       });
-    }
-  }
-
-  if (request.method === "POST" && url.pathname === "/api/invitations/redeem") {
-    const decision = invitationRedemptionLimiter.consume(
-      getRateLimitClientKey(request, environment.auth.trustedIpHeader),
-      5,
-      60_000,
-    );
-    if (!decision.allowed) {
-      return NextResponse.json(
-        { error: "Too many requests. Please try again later." },
-        {
-          status: 429,
-          headers: { "Retry-After": String(decision.retryAfterSeconds) },
-        },
-      );
     }
   }
 

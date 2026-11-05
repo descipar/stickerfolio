@@ -25,12 +25,34 @@ interface RateLimitEntry {
   resetsAt: number;
 }
 
+export const defaultRateLimiterMaxEntries = 10_000;
+
+/**
+ * Fixed-window limiter kept in process memory. Memory is bounded (#131):
+ * expired windows are swept once the map reaches its capacity, and if every
+ * entry is still active the oldest window is dropped. Dropping a window can
+ * only make the limiter more permissive for that key, never block a client
+ * that has not exceeded its own limit.
+ */
 export class InMemoryFixedWindowRateLimiter {
   private readonly entries = new Map<string, RateLimitEntry>();
+
+  constructor(private readonly maxEntries = defaultRateLimiterMaxEntries) {
+    if (!Number.isInteger(maxEntries) || maxEntries < 1) {
+      throw new RangeError("maxEntries must be a positive integer.");
+    }
+  }
+
+  get size(): number {
+    return this.entries.size;
+  }
 
   consume(key: string, maximum: number, windowMs: number, now = Date.now()) {
     const current = this.entries.get(key);
     if (!current || current.resetsAt <= now) {
+      // Re-inserting moves the key to the end, keeping the map ordered by window start.
+      this.entries.delete(key);
+      this.makeRoom(now);
       this.entries.set(key, { count: 1, resetsAt: now + windowMs });
       return { allowed: true, retryAfterSeconds: 0 };
     }
@@ -42,6 +64,18 @@ export class InMemoryFixedWindowRateLimiter {
     }
     current.count += 1;
     return { allowed: true, retryAfterSeconds: 0 };
+  }
+
+  private makeRoom(now: number): void {
+    if (this.entries.size < this.maxEntries) return;
+    for (const [key, entry] of this.entries) {
+      if (entry.resetsAt <= now) this.entries.delete(key);
+    }
+    while (this.entries.size >= this.maxEntries) {
+      const oldest = this.entries.keys().next().value;
+      if (oldest === undefined) break;
+      this.entries.delete(oldest);
+    }
   }
 }
 
