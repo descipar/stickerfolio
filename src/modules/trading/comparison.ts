@@ -157,12 +157,12 @@ async function loadActiveGrant(
   if (!hashes) return null;
   const result = await query<ActiveGrantRow>(
     `SELECT c.id AS collection_id, c.collector_id AS owner_collector_id, c.album_id
-       FROM collection_comparison_grants grant
-       JOIN collections c ON c.id = grant.collection_id
-      WHERE (($1::text IS NOT NULL AND grant.token_hash = $1)
-          OR ($2::text IS NOT NULL AND grant.code_hash = $2))
-        AND grant.revoked_at IS NULL
-        AND grant.expires_at > $3
+       FROM collection_comparison_grants cg
+       JOIN collections c ON c.id = cg.collection_id
+      WHERE (($1::text IS NOT NULL AND cg.token_hash = $1)
+          OR ($2::text IS NOT NULL AND cg.code_hash = $2))
+        AND cg.revoked_at IS NULL
+        AND cg.expires_at > $3
         AND c.status = 'active'`,
     [hashes.tokenHash, hashes.codeHash, now],
     executor,
@@ -233,10 +233,10 @@ export async function listComparisonGrants(
   );
   if (collection.rowCount !== 1) throw new DirectComparisonError();
   const result = await query<GrantRow>(
-    `SELECT grant.id, grant.expires_at, grant.revoked_at, grant.created_at
-       FROM collection_comparison_grants grant
-      WHERE grant.collection_id = $1
-      ORDER BY grant.created_at DESC, grant.id`,
+    `SELECT cg.id, cg.expires_at, cg.revoked_at, cg.created_at
+       FROM collection_comparison_grants cg
+      WHERE cg.collection_id = $1
+      ORDER BY cg.created_at DESC, cg.id`,
     [collectionId],
     executor,
   );
@@ -250,15 +250,15 @@ export async function revokeComparisonGrant(
   executor: QueryExecutor = getPool(),
 ): Promise<boolean> {
   const result = await query(
-    `UPDATE collection_comparison_grants grant
+    `UPDATE collection_comparison_grants cg
         SET revoked_at = now(), updated_at = now()
        FROM collections c
-      WHERE grant.id = $1
-        AND grant.collection_id = $2
-        AND c.id = grant.collection_id
+      WHERE cg.id = $1
+        AND cg.collection_id = $2
+        AND c.id = cg.collection_id
         AND c.collector_id = $3
         AND c.status = 'active'
-        AND grant.revoked_at IS NULL`,
+        AND cg.revoked_at IS NULL`,
     [grantId, collectionId, collectorId],
     executor,
   );

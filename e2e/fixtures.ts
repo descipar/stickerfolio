@@ -14,6 +14,8 @@ export const credentials = {
     displayName: "E2E Collector",
   },
   partner: {
+    email: "partner@e2e.test",
+    password: "e2e-partner-pass",
     displayName: "E2E Partner",
   },
   newcomer: {
@@ -35,6 +37,7 @@ const authDir = path.join(process.cwd(), "e2e", ".auth");
 export const storageStatePaths = {
   collector: path.join(authDir, "collector.json"),
   newcomer: path.join(authDir, "newcomer.json"),
+  partner: path.join(authDir, "partner.json"),
 };
 
 export const stateFile = path.join(authDir, "state.json");
