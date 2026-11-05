@@ -62,6 +62,27 @@ DATABASE_URL='postgresql://...' ./scripts/postgres-backup.sh --external backups/
 DATABASE_URL='postgresql://...' ./scripts/postgres-restore.sh --external backups/stickerfolio.dump
 ```
 
+The external scripts apply the same TLS policy as the application
+(`scripts/postgres-tls.sh`):
+
+- `DATABASE_SSL_MODE` sets libpq's `PGSSLMODE`. Unlike libpq's `prefer`
+  default, the scripts default to `verify-full`.
+- For `verify-ca` and `verify-full`, `DATABASE_SSL_CA` is required. It is
+  written to a temporary file in a private directory (mode `0700`), passed as
+  `PGSSLROOTCERT`, and deleted when the script exits. Both real newlines and
+  the escaped `
+` form from env files are accepted.
+- `require` and `disable` must be chosen explicitly and print a warning.
+- `ssl*` parameters inside `DATABASE_URL` and inherited `PGSSL*` variables are
+  rejected or cleared, so one unambiguous policy applies.
+
+```bash
+DATABASE_URL='postgresql://...' DATABASE_SSL_MODE=verify-full   DATABASE_SSL_CA="$(cat provider-ca.pem)"   ./scripts/postgres-backup.sh --external backups/stickerfolio.dump
+```
+
+A full dump contains password hashes, sessions, and every holding. Store it
+encrypted and with restricted access.
+
 The external restore target must also be empty. Follow the provider's maintenance and connection-security guidance without introducing provider-specific assumptions into Stickerfolio configuration.
 
 ## Recovery checks
