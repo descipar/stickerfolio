@@ -48,7 +48,7 @@
     "@types/react-dom": "19.2.3",
     "eslint": "9.39.5",
     "eslint-config-next": "16.4.5",
-    "typescript": "^5.9.3",
+    "typescript": "^6.0.3",
     "vitest": "4.1.12"
   },
   "packageManager": "pnpm@11.14.0"
