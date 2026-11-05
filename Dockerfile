@@ -23,6 +23,9 @@ RUN pnpm prune --prod
 
 FROM node:22-alpine AS operations
 ENV NODE_ENV="production"
+# The runtime needs only node. Removing the bundled npm and corepack drops
+# their vulnerable transitive packages from the image (#134).
+RUN rm -rf /usr/local/lib/node_modules /usr/local/bin/npm /usr/local/bin/npx /usr/local/bin/corepack
 WORKDIR /app
 COPY --from=production-dependencies --chown=node:node /app/node_modules ./node_modules
 COPY --from=build --chown=node:node /app/package.json /app/tsconfig.json ./
@@ -33,6 +36,9 @@ USER node
 
 FROM node:22-alpine AS runtime
 ENV NODE_ENV="production"
+# The runtime needs only node. Removing the bundled npm and corepack drops
+# their vulnerable transitive packages from the image (#134).
+RUN rm -rf /usr/local/lib/node_modules /usr/local/bin/npm /usr/local/bin/npx /usr/local/bin/corepack
 ENV HOSTNAME="0.0.0.0"
 ENV PORT="3500"
 WORKDIR /app

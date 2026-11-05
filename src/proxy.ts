@@ -2,6 +2,8 @@ import { NextResponse } from "next/server";
 
 import { getEnvironment } from "@/infrastructure/config";
 import {
+  buildContentSecurityPolicy,
+  createCspNonce,
   getRateLimitClientKey,
   InMemoryFixedWindowRateLimiter,
   isUnsafeCrossOriginRequest,
@@ -35,9 +37,20 @@ export function proxy(request: Request): Response {
     }
   }
 
+  const contentSecurityPolicy = buildContentSecurityPolicy(
+    createCspNonce(),
+    process.env.NODE_ENV === "development",
+  );
   const requestHeaders = new Headers(request.headers);
   requestHeaders.delete(untrustedIpSinkHeader);
-  return NextResponse.next({ request: { headers: requestHeaders } });
+  // Next.js extracts the nonce from this request header and applies it to its scripts.
+  requestHeaders.set("Content-Security-Policy", contentSecurityPolicy);
+  const response = NextResponse.next({ request: { headers: requestHeaders } });
+  response.headers.set("Content-Security-Policy", contentSecurityPolicy);
+  return response;
 }
 
-export const config = { matcher: ["/api/:path*", "/share/:path*"] };
+// Every request except build assets, which carry no CSP-relevant content.
+export const config = {
+  matcher: ["/((?!_next/static|_next/image|favicon.ico).*)"],
+};
