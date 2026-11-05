@@ -1,3 +1,5 @@
+import { createHash } from "node:crypto";
+
 import { z } from "zod";
 
 const safeMethods = new Set(["GET", "HEAD", "OPTIONS"]);
@@ -43,9 +45,68 @@ export class InMemoryFixedWindowRateLimiter {
   }
 }
 
-export function getRateLimitClientKey(request: Request, trustedIpHeader?: string): string {
-  if (!trustedIpHeader) return "no-trusted-client-ip";
-  const value = request.headers.get(trustedIpHeader)?.trim();
+/**
+ * Written by `scripts/client-address-preload.mjs` from the connection's socket
+ * address, overwriting any value a client sent. Only trusted while that preload
+ * is active in this process.
+ */
+export const clientAddressHeader = "x-stickerfolio-client-address";
+const clientAddressPreloadMarker = Symbol.for("stickerfolio.clientAddressPreload");
+
+/** Key used when no per-client address can be trusted; all such clients share it. */
+export const sharedClientKey = "no-trusted-client-ip";
+
+export function isClientAddressPreloadActive(): boolean {
+  return (globalThis as Record<symbol, unknown>)[clientAddressPreloadMarker] === true;
+}
+
+/**
+ * The header that identifies a client: the operator-configured proxy header if
+ * set, otherwise the socket address recorded by the preload. Returns undefined
+ * when neither can be trusted (#124).
+ */
+export function resolveClientAddressHeader(
+  trustedIpHeader?: string,
+  preloadActive = isClientAddressPreloadActive(),
+): string | undefined {
+  if (trustedIpHeader) return trustedIpHeader;
+  return preloadActive ? clientAddressHeader : undefined;
+}
+
+export function getRateLimitClientKey(
+  request: Request,
+  trustedIpHeader?: string,
+  preloadActive = isClientAddressPreloadActive(),
+): string {
+  const header = resolveClientAddressHeader(trustedIpHeader, preloadActive);
+  if (!header) return sharedClientKey;
+  const value = request.headers.get(header)?.trim();
   const address = z.union([z.ipv4(), z.ipv6()]).safeParse(value);
-  return address.success ? address.data : "no-trusted-client-ip";
+  return address.success ? address.data : sharedClientKey;
+}
+
+const sessionCookieNames = ["__Secure-better-auth.session_token", "better-auth.session_token"];
+
+/**
+ * Rate-limit key for authenticated endpoints: one bucket per session, so
+ * signed-in users never share a bucket through a common client address.
+ * Requests without a session cookie fall back to the client key; they are
+ * rejected as unauthenticated by the use case anyway.
+ */
+export function getAuthenticatedRateLimitKey(
+  request: Request,
+  trustedIpHeader?: string,
+  preloadActive = isClientAddressPreloadActive(),
+): string {
+  const cookies = request.headers.get("cookie") ?? "";
+  for (const part of cookies.split(";")) {
+    const separator = part.indexOf("=");
+    if (separator < 0) continue;
+    const name = part.slice(0, separator).trim();
+    const value = part.slice(separator + 1).trim();
+    if (value && sessionCookieNames.includes(name)) {
+      return `session:${createHash("sha256").update(value).digest("hex")}`;
+    }
+  }
+  return `client:${getRateLimitClientKey(request, trustedIpHeader, preloadActive)}`;
 }

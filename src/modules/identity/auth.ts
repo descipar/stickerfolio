@@ -4,7 +4,7 @@ import { betterAuth } from "better-auth";
 import { getEnvironment, type AppEnvironment } from "@/infrastructure/config";
 import { getPool } from "@/infrastructure/database";
 import { query } from "@/infrastructure/database";
-import { untrustedIpSinkHeader } from "@/infrastructure/http";
+import { resolveClientAddressHeader, untrustedIpSinkHeader } from "@/infrastructure/http";
 import { maximumPasswordLength, minimumPasswordLength } from "@/shared/password-policy";
 
 import { hashPassword, verifyPassword } from "./password";
@@ -70,7 +70,12 @@ export function createAuth(environment: AppEnvironment, pool: Pool) {
     advanced: {
       database: { generateId: false },
       ipAddress: {
-        ipAddressHeaders: [environment.auth.trustedIpHeader ?? untrustedIpSinkHeader],
+        // A trusted proxy header or the socket address recorded by the
+        // client-address preload (#124). Without either, Better Auth falls back
+        // to one shared bucket per path, so the sink header is never trusted.
+        ipAddressHeaders: [
+          resolveClientAddressHeader(environment.auth.trustedIpHeader) ?? untrustedIpSinkHeader,
+        ],
       },
       useSecureCookies: environment.appBaseUrl.protocol === "https:",
       defaultCookieAttributes: {

@@ -22,19 +22,43 @@ isolated private link. The bundled Compose deployment uses `disable` solely
 inside its private Docker network. See [Deployment](DEPLOYMENT.md#external-postgresql)
 for the complete mode comparison.
 
-## Trusted proxy addresses
+## Client addresses for rate limits
 
-Leave `AUTH_TRUSTED_IP_HEADER` empty for direct deployments. Set it only when the application origin is reachable exclusively through a trusted reverse proxy that removes every client-supplied value and writes the real client address into one single-value header, such as `X-Real-IP`.
+Rate limits need an address per client that the client cannot choose.
 
-Stickerfolio deliberately ignores `X-Forwarded-For` and all other forwarding headers by default. Without a trusted header, callers share conservative per-endpoint rate-limit buckets; this is safe against spoofing but can cause one busy client to throttle others temporarily.
+- **Direct deployments** (the default): leave `AUTH_TRUSTED_IP_HEADER` empty.
+  The server is started with `node --import client-address-preload.mjs` (the
+  Docker image and `pnpm start` do this). The preload writes each connection's
+  socket address into an internal header and overwrites any value a client sent.
+- **Behind a reverse proxy**: the socket address is the proxy's, so all clients
+  would share it. Set `AUTH_TRUSTED_IP_HEADER` only when the application origin
+  is reachable exclusively through a trusted reverse proxy that removes every
+  client-supplied value and writes the real client address into one
+  single-value header, such as `X-Real-IP`.
+
+Stickerfolio ignores `X-Forwarded-For` and all other forwarding headers unless
+one is configured as trusted. If neither a trusted header nor the preload is
+available, all clients share one bucket per endpoint, and a single client can
+throttle sign-ins for everyone. The application logs
+`security.rate_limit_shared_client_key` at startup in that case.
+
+Note for Docker: connections from the Docker host itself (for example a browser
+on the same machine, or Docker Desktop port forwarding) can all appear with the
+Docker gateway address. Clients on the network keep their own address.
 
 ## Rate limits and request validation
 
-- login attempts: five requests per minute and client address;
+- login attempts: five requests per minute and client address, and ten
+  attempts per ten minutes and normalized email address;
 - open registration: ten requests per minute and client address;
 - invitation redemption: ten requests per minute and client address;
-- comparison-code preparation and resolution: 30 requests per minute and client address;
+- comparison-code preparation and resolution: 30 requests per minute and
+  signed-in session (client address for requests without a session);
 - public share pages: 120 requests per minute and client address.
+
+The per-email login limit stops distributed guessing against one account. As a
+trade-off, someone who knows an address can delay that account's sign-in for up
+to ten minutes, but no longer every account at once.
 
 Counters are process-local and support the documented single-application-instance deployment. Horizontal application scaling requires a shared rate-limit store first.
 

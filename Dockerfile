@@ -39,6 +39,8 @@ WORKDIR /app
 COPY --from=build --chown=node:node /app/.next/standalone ./
 COPY --from=build --chown=node:node /app/.next/static ./.next/static
 COPY --from=build --chown=node:node /app/public ./public
+COPY --from=build --chown=node:node /app/scripts/client-address-preload.mjs ./client-address-preload.mjs
 USER node
 EXPOSE 3500
-CMD ["node", "server.js"]
+# The preload records each connection's socket address for per-client rate limits (#124).
+CMD ["node", "--import", "./client-address-preload.mjs", "server.js"]

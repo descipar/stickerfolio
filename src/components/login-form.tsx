@@ -18,7 +18,9 @@ export function LoginForm() {
       password: String(form.get("password") ?? ""),
     });
     if (result.error) {
-      setError("Email or password is incorrect.");
+      setError(result.error.status === 429
+        ? "Too many sign-in attempts. Please wait a few minutes and try again."
+        : "Email or password is incorrect.");
       setPending(false);
       return;
     }
