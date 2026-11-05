@@ -31,6 +31,22 @@ An album is a logical catalog. Stable sticker identities belong to that album, w
 
 Holdings are sparse. No row means quantity zero, and only quantities from 1 through 99 are stored. Composite foreign keys guarantee that a holding's sticker belongs to the exact revision selected by its collection. A partial unique index permits at most one active collection per collector and logical album.
 
+Holding writes are serialized per collection: every change locks the
+collection row (`FOR UPDATE`) and then reads the stored quantity. The holdings
+API accepts two forms (#127):
+
+- `{ "delta": n }` adds `n` to the stored value, clamped to 0..99. The album
+  view's +/- buttons use it, so taps on two devices both count.
+- `{ "quantity": q, "expectedQuantity": e }` sets an absolute value only if
+  the stored value is still `e`; otherwise it answers `409` with the current
+  quantity. Typed values in the album view use it. Without
+  `expectedQuantity`, the write is unconditional (seeds, scripts).
+
+All writes go through one function that also asks for the lowest permitted
+quantity. It is always 0 today. Trade reservations (#97) will return the
+reserved copies there, inside the same transaction and lock, so no write can
+drop a quantity below what an active proposal has reserved.
+
 ## Read-only collection sharing
 
 Revocable list sharing belongs to the `collections` module because it exposes a

@@ -244,13 +244,71 @@ export async function loadCollectionExport(
   };
 }
 
-async function updateQuantity(
+export const minimumHoldingQuantity = 0;
+export const maximumHoldingQuantity = 99;
+
+/**
+ * A holding change (#127):
+ * - `set`: an absolute quantity. With `expectedQuantity`, the write only
+ *   succeeds if the stored quantity still matches (optimistic concurrency).
+ * - `add`: a relative change applied to the stored value under the
+ *   collection lock, so concurrent increments from two devices both count.
+ *   The result is clamped to 0..99.
+ */
+export type HoldingChange =
+  | { type: "set"; quantity: number; expectedQuantity?: number }
+  | { type: "add"; delta: number };
+
+export class HoldingConflictError extends CollectionError {
+  constructor(
+    message: string,
+    readonly currentQuantity: number,
+  ) {
+    super(message, 409);
+    this.name = "HoldingConflictError";
+  }
+}
+
+function isQuantity(value: number): boolean {
+  return Number.isInteger(value) && value >= minimumHoldingQuantity && value <= maximumHoldingQuantity;
+}
+
+function validateChange(change: HoldingChange): void {
+  if (change.type === "set") {
+    if (!isQuantity(change.quantity)) {
+      throw new CollectionError("Quantity must be an integer from 0 through 99.");
+    }
+    if (change.expectedQuantity !== undefined && !isQuantity(change.expectedQuantity)) {
+      throw new CollectionError("Expected quantity must be an integer from 0 through 99.");
+    }
+    return;
+  }
+  if (!Number.isInteger(change.delta) || change.delta === 0 || Math.abs(change.delta) > maximumHoldingQuantity) {
+    throw new CollectionError("Delta must be a non-zero integer from -99 through 99.");
+  }
+}
+
+/**
+ * Lowest quantity a holding may currently have. Always 0 today. Trade
+ * reservations (#97) will return the copies reserved by active proposals here
+ * (one spare copy per reservation on top of the owned copy), so no write path
+ * can drop a quantity below what is promised. Every holding write goes through
+ * {@link applyHoldingChange} while holding the collection row lock, which is
+ * the serialization point reservations will share.
+ */
+async function reservedQuantityFloor(): Promise<number> {
+  // #97: SELECT the reserved copies for (collection, sticker) inside the same
+  // transaction and return 1 + reserved when anything is reserved.
+  return minimumHoldingQuantity;
+}
+
+async function applyHoldingChange(
   client: PoolClient,
   collectorId: string,
   collectionId: string,
   stickerId: string,
-  quantity: number,
-): Promise<void> {
+  change: HoldingChange,
+): Promise<number> {
   const collection = await query<{ album_id: string; revision_id: string }>(
     `SELECT album_id, revision_id FROM collections
       WHERE id = $1 AND collector_id = $2 AND status = 'active' FOR UPDATE`,
@@ -268,13 +326,32 @@ async function updateQuantity(
   );
   if (membership.rowCount !== 1) throw new CollectionError("Sticker is not part of the collection revision.");
 
-  if (quantity === 0) {
+  const stored = await query<{ quantity: number }>(
+    "SELECT quantity FROM holdings WHERE collection_id = $1 AND sticker_id = $2 FOR UPDATE",
+    [collectionId, stickerId],
+    client,
+  );
+  const previous = stored.rows[0]?.quantity ?? 0;
+
+  if (change.type === "set" && change.expectedQuantity !== undefined && change.expectedQuantity !== previous) {
+    throw new HoldingConflictError("The quantity was changed elsewhere.", previous);
+  }
+  const requested = change.type === "set" ? change.quantity : previous + change.delta;
+  const next = Math.min(maximumHoldingQuantity, Math.max(minimumHoldingQuantity, requested));
+
+  const floor = await reservedQuantityFloor();
+  if (next < floor) {
+    throw new HoldingConflictError("Copies of this sticker are reserved for a trade.", previous);
+  }
+  if (next === previous) return previous;
+
+  if (next === 0) {
     await query(
       "DELETE FROM holdings WHERE collection_id = $1 AND sticker_id = $2",
       [collectionId, stickerId],
       client,
     );
-    return;
+    return 0;
   }
 
   await query(
@@ -282,8 +359,24 @@ async function updateQuantity(
      VALUES ($1, $2, $3, $4, $5)
      ON CONFLICT (collection_id, sticker_id)
      DO UPDATE SET quantity = EXCLUDED.quantity, updated_at = now()`,
-    [collectionId, current.album_id, current.revision_id, stickerId, quantity],
+    [collectionId, current.album_id, current.revision_id, stickerId, next],
     client,
+  );
+  return next;
+}
+
+/** Applies a holding change and returns the resulting quantity. */
+export async function changeHoldingQuantity(
+  collectorId: string,
+  collectionId: string,
+  stickerId: string,
+  change: HoldingChange,
+  pool: Pool = getPool(),
+): Promise<number> {
+  validateChange(change);
+  return withTransaction(
+    (client) => applyHoldingChange(client, collectorId, collectionId, stickerId, change),
+    pool,
   );
 }
 
@@ -294,11 +387,5 @@ export async function setHoldingQuantity(
   quantity: number,
   pool: Pool = getPool(),
 ): Promise<void> {
-  if (!Number.isInteger(quantity) || quantity < 0 || quantity > 99) {
-    throw new CollectionError("Quantity must be an integer from 0 through 99.");
-  }
-  await withTransaction(
-    (client) => updateQuantity(client, collectorId, collectionId, stickerId, quantity),
-    pool,
-  );
+  await changeHoldingQuantity(collectorId, collectionId, stickerId, { type: "set", quantity }, pool);
 }

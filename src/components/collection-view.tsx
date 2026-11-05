@@ -107,25 +107,37 @@ export function CollectionView({ collectionId }: { collectionId: string }) {
     });
   }, [filter, search, selectedSection, stickers]);
 
-  async function updateQuantity(sticker: Sticker, requested: number) {
+  // +/- send a relative change so taps on two devices both count; typed
+  // values send the quantity this view last saw and get 409 if it changed (#127).
+  async function updateQuantity(sticker: Sticker, requested: number, mode: "step" | "set" = "set") {
     const quantity = Math.max(0, Math.min(99, Math.round(requested)));
     if (pending.has(sticker.id) || quantity === sticker.quantity) return;
     const previous = sticker.quantity;
+    const showQuantity = (value: number) =>
+      setStickers((current) => current?.map((item) => item.id === sticker.id ? { ...item, quantity: value } : item) ?? null);
     setError("");
     setSavedSticker(null);
     setPending((current) => new Set(current).add(sticker.id));
-    setStickers((current) => current?.map((item) => item.id === sticker.id ? { ...item, quantity } : item) ?? null);
+    showQuantity(quantity);
     const response = await fetch(`/api/collections/${collectionId}/holdings/${sticker.id}`, {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ quantity }),
-    });
-    if (!response.ok) {
-      setStickers((current) => current?.map((item) => item.id === sticker.id ? { ...item, quantity: previous } : item) ?? null);
-      setError(`Could not save ${sticker.code}. Try again.`);
-    } else {
+      body: JSON.stringify(
+        mode === "step" ? { delta: quantity - previous } : { quantity, expectedQuantity: previous },
+      ),
+    }).catch(() => null);
+    const saved = response ? await response.json().catch(() => null) as { quantity?: unknown } | null : null;
+    const savedQuantity = typeof saved?.quantity === "number" ? saved.quantity : null;
+    if (response?.ok && savedQuantity !== null) {
+      showQuantity(savedQuantity);
       setSavedSticker(sticker.id);
       window.setTimeout(() => setSavedSticker((current) => current === sticker.id ? null : current), 1200);
+    } else if (response?.status === 409 && savedQuantity !== null) {
+      showQuantity(savedQuantity);
+      setError(`${sticker.code} was changed on another device and is now ${savedQuantity}. Check it and try again.`);
+    } else {
+      showQuantity(previous);
+      setError(`Could not save ${sticker.code}. Try again.`);
     }
     setPending((current) => {
       const next = new Set(current);
@@ -259,7 +271,7 @@ export function CollectionView({ collectionId }: { collectionId: string }) {
                     <small>{savedSticker === sticker.id ? "Saved" : statusText}</small>
                   </div>
                   <div className="quantity-control" aria-label={`Quantity for ${sticker.code}`}>
-                    <button type="button" disabled={isPending || sticker.quantity === 0} aria-label={`Decrease ${sticker.code}`} onClick={() => void updateQuantity(sticker, sticker.quantity - 1)}>−</button>
+                    <button type="button" disabled={isPending || sticker.quantity === 0} aria-label={`Decrease ${sticker.code}`} onClick={() => void updateQuantity(sticker, sticker.quantity - 1, "step")}>−</button>
                     <input
                       key={`${sticker.id}-${sticker.quantity}`}
                       aria-label={`Quantity for ${sticker.code}`}
@@ -280,7 +292,7 @@ export function CollectionView({ collectionId }: { collectionId: string }) {
                       }}
                       onKeyDown={(event) => { if (event.key === "Enter") event.currentTarget.blur(); }}
                     />
-                    <button type="button" disabled={isPending || sticker.quantity === 99} aria-label={`Increase ${sticker.code}`} onClick={() => void updateQuantity(sticker, sticker.quantity + 1)}>+</button>
+                    <button type="button" disabled={isPending || sticker.quantity === 99} aria-label={`Increase ${sticker.code}`} onClick={() => void updateQuantity(sticker, sticker.quantity + 1, "step")}>+</button>
                   </div>
                 </li>
               );

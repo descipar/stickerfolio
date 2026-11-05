@@ -2,12 +2,24 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 
 import { readLimitedJson } from "@/infrastructure/http";
-import { setOwnHoldingQuantity } from "@/modules/collections";
+import { changeOwnHoldingQuantity, HoldingConflictError, type HoldingChange } from "@/modules/collections";
 
 import { apiError, requestBodyTooLarge } from "../../../../http";
 
 const paramsSchema = z.object({ collectionId: z.uuid(), stickerId: z.uuid() });
-const bodySchema = z.object({ quantity: z.number().int().min(0).max(99) });
+const quantity = z.number().int().min(0).max(99);
+// Either a relative change (`delta`) or an absolute `quantity`, optionally
+// guarded by the `expectedQuantity` the client last saw (#127).
+const bodySchema = z.union([
+  z.object({ delta: z.number().int().min(-99).max(99).refine((value) => value !== 0) }).strict(),
+  z.object({ quantity, expectedQuantity: quantity.optional() }).strict(),
+]);
+
+function toChange(body: z.infer<typeof bodySchema>): HoldingChange {
+  return "delta" in body
+    ? { type: "add", delta: body.delta }
+    : { type: "set", quantity: body.quantity, expectedQuantity: body.expectedQuantity };
+}
 
 export async function PUT(
   request: Request,
@@ -21,14 +33,20 @@ export async function PUT(
     return NextResponse.json({ error: "Invalid holding update." }, { status: 400 });
   }
   try {
-    await setOwnHoldingQuantity(
+    const result = await changeOwnHoldingQuantity(
       request.headers,
       params.data.collectionId,
       params.data.stickerId,
-      body.data.quantity,
+      toChange(body.data),
     );
-    return NextResponse.json({ quantity: body.data.quantity });
+    return NextResponse.json({ quantity: result });
   } catch (error) {
+    if (error instanceof HoldingConflictError) {
+      return NextResponse.json(
+        { error: error.message, quantity: error.currentQuantity },
+        { status: 409 },
+      );
+    }
     return apiError(error, request);
   }
 }

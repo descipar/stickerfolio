@@ -10,6 +10,7 @@ import {
 
 import { exportFileName, serializeCollectionExport } from "./csv";
 import {
+  changeHoldingQuantity,
   CollectionError,
   createCollection,
   listCollections,
@@ -18,6 +19,7 @@ import {
   removeCollection,
   setHoldingQuantity,
   type CollectionExportType,
+  type HoldingChange,
   type CollectionSticker,
   type CollectionSummary,
 } from "./repository";
@@ -138,6 +140,19 @@ export async function setOwnHoldingQuantity(
 ): Promise<void> {
   const identity = await requireCollectorContext(headers, auth, pool);
   await setHoldingQuantity(identity.collector.id, collectionId, stickerId, quantity, pool);
+}
+
+/** Applies a relative or checked absolute change to an own holding (#127). */
+export async function changeOwnHoldingQuantity(
+  headers: Headers,
+  collectionId: string,
+  stickerId: string,
+  change: HoldingChange,
+  auth?: CollectorAuth,
+  pool: Pool = getPool(),
+): Promise<number> {
+  const identity = await requireCollectorContext(headers, auth, pool);
+  return changeHoldingQuantity(identity.collector.id, collectionId, stickerId, change, pool);
 }
 
 /**
