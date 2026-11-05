@@ -1,9 +1,13 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  clientAddressHeader,
+  getAuthenticatedRateLimitKey,
   getRateLimitClientKey,
   InMemoryFixedWindowRateLimiter,
   isUnsafeCrossOriginRequest,
+  resolveClientAddressHeader,
+  sharedClientKey,
 } from "./request-security";
 
 describe("state-changing request origin policy", () => {
@@ -59,15 +63,49 @@ describe("sensitive endpoint rate-limit policy", () => {
     const request = new Request("https://stickers.example.test/api/invitations/redeem", {
       headers: { "x-forwarded-for": "203.0.113.10", "x-real-ip": "192.0.2.20" },
     });
-    expect(getRateLimitClientKey(request)).toBe("no-trusted-client-ip");
-    expect(getRateLimitClientKey(request, "x-real-ip")).toBe("192.0.2.20");
+    expect(getRateLimitClientKey(request, undefined, false)).toBe(sharedClientKey);
+    expect(getRateLimitClientKey(request, "x-real-ip", false)).toBe("192.0.2.20");
     expect(
       getRateLimitClientKey(
         new Request("https://stickers.example.test", {
           headers: { "x-real-ip": "not-an-ip" },
         }),
         "x-real-ip",
+        false,
       ),
-    ).toBe("no-trusted-client-ip");
+    ).toBe(sharedClientKey);
+  });
+
+  it("keys clients by the preload-recorded socket address when no proxy header is trusted", () => {
+    const first = new Request("https://stickers.example.test", {
+      headers: { [clientAddressHeader]: "198.51.100.1", "x-forwarded-for": "203.0.113.10" },
+    });
+    const second = new Request("https://stickers.example.test", {
+      headers: { [clientAddressHeader]: "198.51.100.2" },
+    });
+    expect(getRateLimitClientKey(first, undefined, true)).toBe("198.51.100.1");
+    expect(getRateLimitClientKey(second, undefined, true)).toBe("198.51.100.2");
+    // Without the preload the header could be client-supplied and is ignored.
+    expect(getRateLimitClientKey(first, undefined, false)).toBe(sharedClientKey);
+    // An operator-configured proxy header always takes precedence.
+    expect(resolveClientAddressHeader("x-real-ip", true)).toBe("x-real-ip");
+    expect(resolveClientAddressHeader(undefined, true)).toBe(clientAddressHeader);
+    expect(resolveClientAddressHeader(undefined, false)).toBeUndefined();
+  });
+
+  it("keys authenticated requests by session rather than by client address", () => {
+    const sameClient = { [clientAddressHeader]: "198.51.100.1" };
+    const alice = new Request("https://stickers.example.test", {
+      headers: { ...sameClient, cookie: "theme=dark; better-auth.session_token=alice-token.sig" },
+    });
+    const bob = new Request("https://stickers.example.test", {
+      headers: { ...sameClient, cookie: "__Secure-better-auth.session_token=bob-token.sig" },
+    });
+    const anonymous = new Request("https://stickers.example.test", { headers: sameClient });
+    const aliceKey = getAuthenticatedRateLimitKey(alice, undefined, true);
+    expect(aliceKey).toMatch(/^session:[0-9a-f]{64}$/);
+    expect(aliceKey).not.toContain("alice-token");
+    expect(getAuthenticatedRateLimitKey(bob, undefined, true)).not.toBe(aliceKey);
+    expect(getAuthenticatedRateLimitKey(anonymous, undefined, true)).toBe("client:198.51.100.1");
   });
 });

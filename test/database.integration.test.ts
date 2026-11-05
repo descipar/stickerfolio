@@ -71,7 +71,7 @@ describe("PostgreSQL persistence", () => {
     expect(status).toEqual({
       status: "ready",
       app: "2.0.0-rc.1",
-      schema: "000008_collection_comparison_grants",
+      schema: "000009_active_collector_profiles",
     });
   });
 

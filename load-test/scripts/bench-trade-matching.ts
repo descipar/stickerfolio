@@ -8,8 +8,8 @@
  * and EXPLAIN (ANALYZE, BUFFERS) plans.
  *
  * Use a DISPOSABLE database that is migrated and has the World Cup 2026
- * catalog seeded. The script deletes and recreates its own "Bench …" collector
- * profiles (no user accounts are created):
+ * catalog seeded. The script deletes and recreates its own "Bench …" accounts
+ * and collector profiles (no passwords; they cannot sign in):
  *
  *   pnpm db:migrate && pnpm seed:wm2026
  *   BENCH_SIZES=50,500,2000 BENCH_OUT=load-test/results/trade-matching.md \
@@ -74,9 +74,13 @@ async function growTo(target: number, current: number, album: { album_id: string
   if (target <= current) return;
   await query(`SELECT setseed($1)`, [current / (target + 1)]);
   await query(
-    `WITH new_profiles AS (
-       INSERT INTO collector_profiles (display_name, onboarding_completed_at)
-       SELECT 'Bench ' || g, now() FROM generate_series($1::int, $2::int) g
+    `WITH new_accounts AS (
+       INSERT INTO "user" (name, email)
+       SELECT 'Bench ' || g, 'bench-' || g || '@bench.test' FROM generate_series($1::int, $2::int) g
+       RETURNING id, name
+     ), new_profiles AS (
+       INSERT INTO collector_profiles (display_name, onboarding_completed_at, user_id)
+       SELECT name, now(), id FROM new_accounts
        RETURNING id
      ), new_collections AS (
        INSERT INTO collections (collector_id, album_id, revision_id)
@@ -112,7 +116,7 @@ async function main(): Promise<void> {
   )).rows[0];
   if (!album) throw new Error("Seed the World Cup 2026 catalog first (pnpm seed:wm2026).");
 
-  await query(`DELETE FROM collector_profiles WHERE display_name LIKE 'Bench %'`);
+  await query(`DELETE FROM "user" WHERE email LIKE 'bench-%@bench.test'`);
   const version = (await query<{ version: string }>(`SHOW server_version`)).rows[0]!.version;
   const lines: string[] = [
     "# Trade matching benchmark (#117)",
@@ -164,7 +168,7 @@ async function main(): Promise<void> {
   const output = [...lines, ...notes, "", ...plans, ""].join("\n");
   if (outFile) writeFileSync(outFile, output);
   else console.info(output);
-  await query(`DELETE FROM collector_profiles WHERE display_name LIKE 'Bench %'`);
+  await query(`DELETE FROM "user" WHERE email LIKE 'bench-%@bench.test'`);
 }
 
 main()

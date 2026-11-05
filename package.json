@@ -5,9 +5,9 @@
   "license": "PolyForm-Noncommercial-1.0.0",
   "description": "A portable, mobile-first sticker album tracker for multiple collectors.",
   "scripts": {
-    "dev": "next dev --port 3500",
+    "dev": "NODE_OPTIONS='--import ./scripts/client-address-preload.mjs' next dev --port 3500",
     "build": "next build",
-    "start": "next start --port 3500",
+    "start": "NODE_OPTIONS='--import ./scripts/client-address-preload.mjs' next start --port 3500",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",

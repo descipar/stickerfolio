@@ -3,7 +3,7 @@ import { z } from "zod";
 
 import { getEnvironment } from "@/infrastructure/config";
 import {
-  getRateLimitClientKey,
+  getAuthenticatedRateLimitKey,
   InMemoryFixedWindowRateLimiter,
   readLimitedJson,
 } from "@/infrastructure/http";
@@ -26,7 +26,7 @@ export async function handleDirectComparisonRequest(
   loadComparison: typeof getOwnDirectComparison = getOwnDirectComparison,
   trustedIpHeader?: string,
 ): Promise<NextResponse> {
-  const key = getRateLimitClientKey(request, trustedIpHeader);
+  const key = getAuthenticatedRateLimitKey(request, trustedIpHeader);
   const decision = limiter.consume(`comparison-result:${key}`, 30, 60_000);
   if (!decision.allowed) {
     return NextResponse.json(

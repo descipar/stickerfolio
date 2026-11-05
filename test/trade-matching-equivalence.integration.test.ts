@@ -88,8 +88,14 @@ describe("SQL-side trade matching is equivalent to the reference implementation"
 
     const random = prng(117);
     async function addCollector(displayName: string, visible: boolean) {
+      // Accounts are created directly; passwords are irrelevant to matching.
       const profile = await query<{ id: string }>(
-        `INSERT INTO collector_profiles (display_name, onboarding_completed_at) VALUES ($1, now()) RETURNING id`,
+        `WITH account AS (
+           INSERT INTO "user" (name, email) VALUES ($1, gen_random_uuid() || '@equivalence.test') RETURNING id
+         )
+         INSERT INTO collector_profiles (display_name, onboarding_completed_at, user_id)
+         SELECT $1, now(), id FROM account
+         RETURNING id`,
         [displayName],
         pool,
       );
@@ -126,6 +132,13 @@ describe("SQL-side trade matching is equivalent to the reference implementation"
     }
     const archived = await addCollector("Archived partner", true);
     await query(`UPDATE collections SET status = 'archived' WHERE id = $1`, [archived.collectionId], pool);
+    const suspended = await addCollector("Suspended partner", true);
+    await query(
+      `UPDATE "user" SET status = 'suspended'
+        WHERE id = (SELECT user_id FROM collector_profiles WHERE id = $1)`,
+      [suspended.collectorId],
+      pool,
+    );
 
     // Later collectors use revision two of the same logical album.
     await archiveRevision(revisionOne, pool);
@@ -169,5 +182,6 @@ describe("SQL-side trade matching is equivalent to the reference implementation"
     expect(all.matches.some((match) => match.kind === "one-way")).toBe(true);
     expect(all.matches.some((match) => match.offersToYou.some((sticker) => sticker.code !== sticker.partnerCode))).toBe(true);
     expect(all.matches.some((match) => match.displayName === "Archived partner")).toBe(false);
+    expect(all.matches.some((match) => match.displayName === "Suspended partner")).toBe(false);
   });
 });
