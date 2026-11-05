@@ -8,7 +8,20 @@ export async function createReadinessResponse(
   checkReadiness: typeof getReadinessStatus = getReadinessStatus,
 ): Promise<NextResponse> {
   try {
-    return NextResponse.json(await checkReadiness(), {
+    const readiness = await checkReadiness();
+    if (readiness.status !== "ready") {
+      writeLog("warn", "health.schema_behind", {
+        schema: readiness.schema,
+        expectedSchema: readiness.expectedSchema,
+      });
+    } else if (readiness.schemaState === "ahead") {
+      writeLog("info", "health.schema_ahead", {
+        schema: readiness.schema,
+        expectedSchema: readiness.expectedSchema,
+      });
+    }
+    return NextResponse.json(readiness, {
+      status: readiness.status === "ready" ? 200 : 503,
       headers: { "Cache-Control": "no-store" },
     });
   } catch (error) {

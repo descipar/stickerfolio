@@ -50,7 +50,7 @@ Before tagging a release, run and record evidence for:
 - **Bundled PostgreSQL** and **external PostgreSQL** (`compose.external.yml` + `DATABASE_URL`) both start, migrate, and serve `/api/health/ready`.
 - **Seeds**: plain container startup/migrations seed no domain data; `start.sh` seeds the bundled catalog templates only; the example-holdings seed requires an explicit collector and never runs automatically; `pnpm seed:wm2026` is idempotent.
 - **Backup/restore**: `scripts/postgres-backup.sh` then restore into an empty database; verify migration history.
-- **Rollback**: redeploy the previous image tag; migrations roll forward with a corrective migration (no history rewrite). Database restore from the verified dump is the data-loss fallback.
+- **Rollback**: redeploy the previous image tag; `/api/health/ready` must answer 200 with `schemaState: "ahead"`. Migrations roll forward with a corrective migration (no history rewrite). Database restore from the verified dump is the data-loss fallback.
 - Review the security and privacy evidence plus the automated mobile (#44) and
   load-smoke (#43) results. Run and attach the optional full 50-user measurement
   before materially wider public use or capacity-sensitive deployment changes.

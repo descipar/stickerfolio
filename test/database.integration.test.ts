@@ -2,6 +2,7 @@ import { afterAll, beforeAll, describe, expect, inject, it } from "vitest";
 
 import {
   closeDatabasePool,
+  expectedSchemaVersion,
   getPool,
   query,
   withTransaction,
@@ -71,8 +72,42 @@ describe("PostgreSQL persistence", () => {
     expect(status).toEqual({
       status: "ready",
       app: "2.0.0-rc.1",
-      schema: "000009_active_collector_profiles",
+      schema: expectedSchemaVersion,
+      expectedSchema: expectedSchemaVersion,
+      schemaState: "current",
     });
+  });
+
+  it("reports not ready while an expected migration is pending, and ready when ahead", async () => {
+    const pool = getPool(environment);
+    await withTransaction(async (client) => {
+      await query("DELETE FROM schema_migrations WHERE name = $1", [expectedSchemaVersion], client);
+      expect(await getReadinessStatus(client)).toMatchObject({
+        status: "not_ready",
+        schemaState: "behind",
+      });
+      throw new Error("rollback behind");
+    }, pool).catch((error: Error) => {
+      if (error.message !== "rollback behind") throw error;
+    });
+
+    await withTransaction(async (client) => {
+      await query(
+        "INSERT INTO schema_migrations (name, run_on) VALUES ($1, now())",
+        ["999999_future_forward_compatible"],
+        client,
+      );
+      expect(await getReadinessStatus(client)).toMatchObject({
+        status: "ready",
+        schema: "999999_future_forward_compatible",
+        schemaState: "ahead",
+      });
+      throw new Error("rollback ahead");
+    }, pool).catch((error: Error) => {
+      if (error.message !== "rollback ahead") throw error;
+    });
+
+    expect(await getReadinessStatus(pool)).toMatchObject({ schemaState: "current" });
   });
 
   it("commits successful transactions", async () => {

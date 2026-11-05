@@ -15,7 +15,17 @@ Both Compose variants run the same migration command in a one-shot service befor
 ## Health and version endpoints
 
 - `GET /api/health/live` reports process liveness without contacting PostgreSQL.
-- `GET /api/health/ready` verifies PostgreSQL connectivity and the migrated schema.
+- `GET /api/health/ready` verifies PostgreSQL connectivity and compares the
+  applied migrations with the list compiled into the running build
+  (`src/infrastructure/database/schema-manifest.ts`):
+  - `schemaState: "current"`: exactly the expected migrations; HTTP 200.
+  - `schemaState: "behind"`: at least one expected migration is missing, for
+    example when the app was started without the migrate service. HTTP 503 with
+    `status: "not_ready"`; run `pnpm db:migrate`.
+  - `schemaState: "ahead"`: all expected migrations plus newer ones. HTTP 200.
+    This is the rollback case: a previous image on a newer, forward-compatible
+    schema keeps serving. A destructive migration must not be rolled back this
+    way; restore the pre-update dump instead.
 - `GET /api/version` reports application and schema versions for diagnostics.
 
 These responses are not cached. Inspect Compose state and recent logs with:
