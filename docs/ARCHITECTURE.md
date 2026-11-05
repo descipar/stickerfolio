@@ -45,6 +45,27 @@ request, so a link remains live without copying or denormalizing private
 collection data. The HTTP and visual layers call the module's public API and do
 not query the share table directly.
 
+## Automatic trade matching
+
+Partner discovery belongs to the `trading` module and is read-only. It handles
+each request with two statements:
+
+1. A partner-summary statement. It counts, for every trading-visible partner
+   with the same logical album, the stickers that partner can offer and the
+   stickers that partner needs. Offers are the partner's spare copies of
+   stickers the owner is missing. Needs are the owner's duplicates that exist in
+   the partner's pinned revision and that the partner does not hold. Direction
+   filtering, sorting (display names use the ICU root collation `und-x-icu`),
+   counting and `LIMIT/OFFSET` all run in PostgreSQL, and only the requested
+   page of summaries is returned.
+2. A detail statement. It loads sticker lines only for the partners on that
+   page.
+
+Both statements share the same candidate definition, so summary counts and
+detail lines cannot diverge. Work in Node.js is bounded by the page size rather
+than by the number of collectors. Measurements are recorded in
+`load-test/results/trade-matching.md`.
+
 ## Direct collection comparison
 
 Short-lived comparison grants belong to the `trading` module. They reuse the

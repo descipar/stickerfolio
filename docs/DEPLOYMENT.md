@@ -97,7 +97,10 @@ Reserved URL characters in database passwords must be percent-encoded when they 
 
 ## External PostgreSQL
 
-Use PostgreSQL 17 or a compatible managed service. External Compose defaults to
+Use PostgreSQL 17 or a compatible managed service built with ICU support (the
+default for PostgreSQL 16 and later). Trade matching sorts display names with
+the `und-x-icu` collation; `SELECT 1 FROM pg_collation WHERE collname = 'und-x-icu'`
+must return a row. External Compose defaults to
 `verify-full`; configure the database URL and the CA certificate supplied by
 the database operator in `.env`:
 
