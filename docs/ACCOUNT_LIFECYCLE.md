@@ -30,8 +30,18 @@ administrator.
   hook refuses to create a session for a non-active user, and `resolveIdentity`
   returns `null` for a non-active user, so existing requests stop resolving to
   an identity immediately.
-- Collections, holdings, collector profile, and trading preferences are kept
-  unchanged so the account can be restored intact.
+- The account disappears from everything other users can see. Every read path
+  that exposes a collector to someone else joins the
+  `active_collector_profiles` view (profile with an existing `active`
+  account):
+  - trade matching no longer lists the collector;
+  - the collector's public share links return the same not-found response as
+    an unknown or revoked link;
+  - the collector's direct-comparison codes and QR links stop working.
+- Collections, holdings, collector profile, trading preferences, share links,
+  and comparison grants are kept unchanged. Reactivation restores the account
+  and its visibility intact; links and grants that have not expired or been
+  revoked work again.
 - Deactivation requires the current password so the action is deliberate.
 
 ## Permanent deletion

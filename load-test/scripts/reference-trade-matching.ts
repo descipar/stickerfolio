@@ -4,7 +4,8 @@ import type { TradeMatch, TradeMatchOptions } from "@/modules/trading";
 /**
  * Reference oracle for trade matching: the pre-#117 implementation, which
  * loads every exchange-relevant sticker row for every visible partner and then
- * groups, filters, sorts, and paginates in Node.js. It is deliberately simple
+ * groups, filters, sorts, and paginates in Node.js, extended with the #123 rule
+ * that only active accounts are visible. It is deliberately simple
  * and is used by the equivalence integration test and the benchmark to prove
  * the SQL-side implementation is equivalent.
  */
@@ -56,6 +57,7 @@ export async function referenceTradeMatches(
          ON partner_preference.collector_id = partner.collector_id
         AND partner_preference.visible
        JOIN collector_profiles profile ON profile.id = partner.collector_id
+       JOIN active_collector_profiles active_partner ON active_partner.id = partner.collector_id
        JOIN album_revision_stickers owner_sticker
          ON owner_sticker.revision_id = owner.revision_id
        JOIN album_revision_stickers partner_sticker

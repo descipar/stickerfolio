@@ -259,6 +259,7 @@ async function loadSharedCollectionInTransaction(
             r.revision_number, sl.scope, sl.expires_at
        FROM collection_share_links sl
        JOIN collections c ON c.id = sl.collection_id
+       JOIN active_collector_profiles owner ON owner.id = c.collector_id
        JOIN albums a ON a.id = c.album_id
        JOIN album_revisions r ON r.id = c.revision_id
       WHERE sl.token_hash = $1

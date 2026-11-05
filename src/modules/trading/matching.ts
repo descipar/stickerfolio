@@ -127,6 +127,8 @@ const ownerCandidatesCte = `
       JOIN trading_preferences partner_preference
         ON partner_preference.collector_id = partner.collector_id
        AND partner_preference.visible
+      JOIN active_collector_profiles active_partner
+        ON active_partner.id = partner.collector_id
   )`;
 
 // Joins a candidate sticker to each visible partner's revision via the stable

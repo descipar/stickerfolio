@@ -159,6 +159,7 @@ async function loadActiveGrant(
     `SELECT c.id AS collection_id, c.collector_id AS owner_collector_id, c.album_id
        FROM collection_comparison_grants cg
        JOIN collections c ON c.id = cg.collection_id
+       JOIN active_collector_profiles owner ON owner.id = c.collector_id
       WHERE (($1::text IS NOT NULL AND cg.token_hash = $1)
           OR ($2::text IS NOT NULL AND cg.code_hash = $2))
         AND cg.revoked_at IS NULL
