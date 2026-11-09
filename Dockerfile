@@ -1,5 +1,5 @@
 # syntax=docker/dockerfile:1.7
-FROM node:22-alpine AS base
+FROM node:26-alpine AS base
 ENV PNPM_HOME="/pnpm"
 ENV PATH="$PNPM_HOME:$PATH"
 RUN corepack enable
@@ -21,7 +21,7 @@ RUN pnpm build
 FROM dependencies AS production-dependencies
 RUN pnpm prune --prod
 
-FROM node:22-alpine AS operations
+FROM node:26-alpine AS operations
 ENV NODE_ENV="production"
 # The runtime needs only node. Removing the bundled npm and corepack drops
 # their vulnerable transitive packages from the image (#134).
@@ -34,7 +34,7 @@ COPY --from=build --chown=node:node /app/scripts ./scripts
 COPY --from=build --chown=node:node /app/src ./src
 USER node
 
-FROM node:22-alpine AS runtime
+FROM node:26-alpine AS runtime
 ENV NODE_ENV="production"
 # The runtime needs only node. Removing the bundled npm and corepack drops
 # their vulnerable transitive packages from the image (#134).
